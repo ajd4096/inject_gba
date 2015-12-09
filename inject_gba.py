@@ -3,43 +3,66 @@
 import	sys
 import	binascii
 import	getopt
+import	hashlib
 import	struct
 import	zlib
 
+
 game_info = {
 	'zelda':	{
+		'md5':		b'32fc43935b17a1707a5c8a68b58b495b',
 		'key':		b'124a3e853c7cd7ba88f92540ba76254446c33c38d4534d3f8911f8d716b0027c17139fc2cc6486deb256cfea5fcfb43b88002b32a9fa2eba469c805bfea4d58b9b259c6b6d6a63e75dad37b936ee90b0',
 		'offset':	41578496,
 		'length':	7985152,
 	},
 	'mario':	{
+		'md5':		b'efb7bf0ae783b1af39d5dc80ea61c4ed',
 		'key':		b'2bf3702bf54b24df82c8644004bd10b6be1cf6c534327a58c11ae0a4b55a70bf136a8ce0042e1ca2e462e581ae675eff176459fb0cfb04fa255ac68b31bf89258e3162568757b05419f765a7ee3419cc',
 		'offset':	44120064,
 		'length':	6920192,
 	},
 	'mm03':		{
+		'md5':		b'c81a3b4e36762190aaa54ba60d6f5fb9',
 		'key':		b'e563ab200ffbfb8e0f2cce9bade0c82f37e25e261eb2169b312cf09f2a3a30f92d372fa2b4b5383fdeadff7b5f8bb51c27a98de145fd518b4cf50e54f23ad894e93615fb58274f7fd5c699a5b3eb05dd',
 		'offset':	38205440,
 		'length':	4847616,
 	},
 }
 
+def	getGameInfo(gameName, adb_data):
+	adb_md5 = hashlib.md5(adb_data).hexdigest()
+	#print("Info: adb md5 is %s" % adb_md5)
+
+	# Try to match by MD5
+	for gn in game_info.keys():
+		gi = game_info[gn]
+		if (gi['md5'] == adb_md5):
+			return gi
+	print("Warning: no matching md5")
+
+	# Try to match by name
+	for gn in game_info.keys():
+		if (gn == gameName):
+			return game_info[gn]
+	print("Error: no matching md5, no matching name")
 
 def	extractFile(gameName, adbFilename):
-	if (not gameName in game_info):
-		print("Game %s not found" % gameName)
-		return
-
-	gi = game_info[gameName]
-	gikey	= gi['key']
-	gioff	= gi['offset']
-	gilen	= gi['length']
-
-	key = bytearray(binascii.unhexlify(gikey))
-	key_len = len(key)
 
 	# Read in the whole alldata.bin file
 	adb_data = open(adbFilename, 'rb').read()
+	#print("Read %d bytes" % len(adb_data))
+
+	gi = getGameInfo(gameName, adb_data)
+	if (not gi):
+		return
+
+	gikey	= gi['key']
+	gioff	= gi['offset']
+	gilen	= gi['length']
+	#print("Using %s/%d/%d" % (gikey, gioff, gilen))
+
+	key = bytearray(binascii.unhexlify(gikey))
+	key_len = len(key)
 
 	# Take a RW copy of the entire chunk
 	data = bytearray(adb_data[gioff : gioff + gilen])
@@ -53,15 +76,19 @@ def	extractFile(gameName, adbFilename):
 	raw_data = zlib.decompress(bytes(data[8:]))
 
 	# Write it out
+	print("Writing %d bytes to %s.gba" % (len(raw_data), adbFilename))
 	open(adbFilename + '.gba', 'wb').write(raw_data)
 
 
 def	injectFile(gameName, adbFilename, injectName):
-	if (not gameName in game_info):
-		print("Game %s not found" % gameName)
+
+	# Read in the whole alldata.bin file into a RW array
+	adb_data = bytearray(open(adbFilename, 'rb').read())
+
+	gi = getGameInfo(gameName, adb_data)
+	if (not gi):
 		return
-	
-	gi = game_info[gameName]
+
 	gikey	= gi['key']
 	gioff	= gi['offset']
 	gilen	= gi['length']
@@ -79,9 +106,6 @@ def	injectFile(gameName, adbFilename, injectName):
 	if (len(compressed_data) > gilen -8):
 		print("Compressed file too large for %s" % injectName)
 		return
-
-	# Read in the whole alldata.bin file into a RW array
-	adb_data = bytearray(open(adbFilename, 'rb').read())
 
 	# Insert the MDF header
 	adb_data[gioff : gioff +4] = b'mdf\0'
@@ -102,9 +126,38 @@ def	injectFile(gameName, adbFilename, injectName):
 	open(injectName + '.adb', 'wb').write(adb_data)
 
 
+def	decodeChunkFile(gameName, chunkFilename):
+	if (not gameName in game_info):
+		print("Game %s not found" % gameName)
+		return
+	
+	gi = game_info[gameName]
+	gikey	= gi['key']
+	gioff	= gi['offset']
+	gilen	= gi['length']
+
+	key = bytearray(binascii.unhexlify(gikey))
+	key_len = len(key)
+
+	# Read in the file as a RW bytearray
+	print("Reading %s" % chunkFilename)
+	chunk_data = bytearray(open(chunkFilename, 'rb').read())
+
+	for offset in range(4, 88):
+		# For each byte, XOR in our key
+		# +8 = skip the MDF magic + unknown 
+		print("Decoding")
+		for i in range(len(chunk_data) -offset):
+			chunk_data[i +offset] ^= key[i % key_len]
+
+		# Write it out
+		print("Saving as %s.decoded" % chunkFilename)
+		open(chunkFilename + '.decoded.%2.2d' % offset, 'wb').write(chunk_data)
+
+
 def	main():
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hlem:z:", ["help", "list", "extact", "mario=", "mm03=", "zelda="])
+		opts, args = getopt.getopt(sys.argv[1:], "hla:c:emz", ["help", "list", "adb=", "extact", "mario", "mm03", "zelda"])
 	except getopt.GetoptError as err:
 		print(str(err))
 		sys.exit(2)
@@ -113,24 +166,35 @@ def	main():
 	extract		= False
 	gameName	= ""
 	adbFilename	= ""
+	chunkFilename	= ""
 	for o, a in opts:
 		if o in ("-h", "--help"):
 			print(
 """
 
-Usage: inject_gba.py [-h] [-l] [-m path/to/mmss/alldata.bin | -z path/to/zelda/alldata.bin] [-e] [romfile] [romfile]
+Usage: inject_gba.py [-h] [-l] [-a path/to/alldata.bin] [-m -z] [-e] [romfile] [romfile]
 
 -h	--help		Print this message.
 -l	--list		List known base games.
 
--m	--mario		Set the path to your Mario & Luigi Superstar Saga alldata.bin file
--z	--zelda		Set the path to your Zelda Minish Cap alldata.bin file
-	--mm03		Set the path to your Megaman Zero 3 alldata.bin file
+-a	--adb		Set the path to your alldata.bin file
+			This will try to guess which key/offset/length to use.
+
+-m	--mario		Try using the Mario & Luigi Superstar Saga key/offset/length
+-z	--zelda		Try using the Zelda Minish Cap key/offset/length
+	--mm03		Try using the Megaman Zero 3 key/offset/length
 
 -e	--extract	Extract rom from the base game alldata.bin file to alldata.bin.gba
-[romfile]		Path to one or more uncompressed .gba files.
 
-You must specify one of the known base titles.
+[romfile]		Path to one or more uncompressed .gba files to inject.
+
+You must specify the path to the adb file.
+
+If the MD5 of the adb file matches a known file it will use the known key/offset/length.
+
+If the MD5 does not match you can try using one of the known key/offset/length sets.
+This will work if you are re-injecting into a modified adb, try using -e to verify.
+
 The alldata.bin containing the injected file will be written to the same location as the .gba file with a .adb suffix
 
 The ROM must compress to < 8M (<4M for mm03)
@@ -141,19 +205,20 @@ I can confirm C.O. Nell looks hawt on the big screen.
 
 """)
 			sys.exit(2)
+		elif o in ("-a", "--adb"):
+			adbFilename	= a
+		elif o in ("-c"):
+			chunkFilename	= a
 		elif o in ("-e", "--extract"):
 			extract = True
 		elif o in ("-l", "--list"):
 			showList = True
 		elif o in ("-m", "--mario"):
 			gameName	= 'mario'
-			adbFilename	= a
 		elif o in ("-z", "--zelda"):
 			gameName	= 'zelda'
-			adbFilename	= a
 		elif o in ("--mm03"):
 			gameName	= 'mm03'
-			adbFilename	= a
 		else:
 			assert False, "unhandled option"
 
@@ -164,10 +229,13 @@ I can confirm C.O. Nell looks hawt on the big screen.
 			print("Offset %d"	% game_info[gi_name]['offset'])
 			print("Length %d"	% game_info[gi_name]['length'])
 
-	if (len(gameName) and len(adbFilename)):
-		if (extract):
-			extractFile(gameName, adbFilename)
+	if (extract and len(adbFilename)):
+		extractFile(gameName, adbFilename)
 
+	if (len(chunkFilename) and len(adbFilename)):
+		decodeChunkFile(gameName, chunkFilename)
+
+	if (len(adbFilename)):
 		for injectName in args:
 			injectFile(gameName, adbFilename, injectName)
 
