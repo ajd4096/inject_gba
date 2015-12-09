@@ -130,11 +130,12 @@ Usage: inject_gba.py [-h] [-l] [-m path/to/mmss/alldata.bin | -z path/to/zelda/a
 -e	--extract	Extract rom from the base game alldata.bin file to alldata.bin.gba
 [romfile]		Path to one or more uncompressed .gba files.
 
-You must specify either -m or -z
-The alldata.bin containing the injected file will be written to the same location as the .gba file
+You must specify one of the known base titles.
+The alldata.bin containing the injected file will be written to the same location as the .gba file with a .adb suffix
 
-The ROM must compress to < 8M.
+The ROM must compress to < 8M (<4M for mm03)
 Some 16M roms work, some don't.
+The other GBA VC titles are all <4M, so not worth using.
 
 I can confirm C.O. Nell looks hawt on the big screen.
 
