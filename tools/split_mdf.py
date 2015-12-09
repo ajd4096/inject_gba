@@ -26,6 +26,7 @@ def	split_mdf_file(filename):
 	next_offset	= start_offset + page_size
 	size_max	=0
 	section_max	=0
+	start_max	=0
 	
 	while next_offset < len(data):
 		magic	= struct.unpack('>4s', data[next_offset: next_offset +4])[0]
@@ -37,6 +38,7 @@ def	split_mdf_file(filename):
 			if (size > size_max):
 				size_max	= size
 				section_max	= section
+				start_max	= start_offset
 
 			# Increment the file section #
 			section += 1
@@ -52,9 +54,12 @@ def	split_mdf_file(filename):
 		if (size > size_max):
 			size_max	= size
 			section_max	= section
+			start_max	= start_offset
 	print("File %s" % filename)
 	print("Sections %d" % section)
-	print("Largest %d (%dM) @ %4.4d" % (size_max, size_max // 1024 // 1024, section_max))
+	print("Largest %4.4d" % section_max)
+	print("Offset %d" % start_max)
+	print("Length %d" % size_max)
 
 
 def	main():
