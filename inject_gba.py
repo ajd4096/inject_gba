@@ -17,6 +17,11 @@ game_info = {
 		'offset':	44120064,
 		'length':	6920192,
 	},
+	'mm03':		{
+		'key':		b'e563ab200ffbfb8e0f2cce9bade0c82f37e25e261eb2169b312cf09f2a3a30f92d372fa2b4b5383fdeadff7b5f8bb51c27a98de145fd518b4cf50e54f23ad894e93615fb58274f7fd5c699a5b3eb05dd',
+		'offset':	38205440,
+		'length':	4847616,
+	},
 }
 
 
@@ -99,14 +104,14 @@ def	injectFile(gameName, adbFilename, injectName):
 
 def	main():
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hlem:z:", ["help", "list", "extact", "mario=", "zelda="])
+		opts, args = getopt.getopt(sys.argv[1:], "hlem:z:", ["help", "list", "extact", "mario=", "mm03=", "zelda="])
 	except getopt.GetoptError as err:
 		print(str(err))
 		sys.exit(2)
 
 	showList	= False
-	gameName	= None
 	extract		= False
+	gameName	= ""
 	adbFilename	= ""
 	for o, a in opts:
 		if o in ("-h", "--help"):
@@ -120,6 +125,7 @@ Usage: inject_gba.py [-h] [-l] [-m path/to/mmss/alldata.bin | -z path/to/zelda/a
 
 -m	--mario		Set the path to your Mario & Luigi Superstar Saga alldata.bin file
 -z	--zelda		Set the path to your Zelda Minish Cap alldata.bin file
+	--mm03		Set the path to your Megaman Zero 3 alldata.bin file
 
 -e	--extract	Extract rom from the base game alldata.bin file to alldata.bin.gba
 [romfile]		Path to one or more uncompressed .gba files.
@@ -144,6 +150,9 @@ I can confirm C.O. Nell looks hawt on the big screen.
 		elif o in ("-z", "--zelda"):
 			gameName	= 'zelda'
 			adbFilename	= a
+		elif o in ("--mm03"):
+			gameName	= 'mm03'
+			adbFilename	= a
 		else:
 			assert False, "unhandled option"
 
@@ -154,7 +163,7 @@ I can confirm C.O. Nell looks hawt on the big screen.
 			print("Offset %d"	% game_info[gi_name]['offset'])
 			print("Length %d"	% game_info[gi_name]['length'])
 
-	if (len(adbFilename)):
+	if (len(gameName) and len(adbFilename)):
 		if (extract):
 			extractFile(gameName, adbFilename)
 
