@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/env python
 # vim: set fileencoding=latin-1
 
 import	sys
@@ -15,6 +15,7 @@ def	write_mdf_section(filename, data):
 
 
 def	split_mdf_file(filename):
+	print("Splitting file %s" % filename)
 
 	# Read in the whole file (zelda alldata.bin is 49M)
 	data = bytes(open(filename, 'rb').read())
@@ -23,14 +24,19 @@ def	split_mdf_file(filename):
 	page_size	= 1024
 	start_offset	= 0
 	next_offset	= start_offset + page_size
+	size_max	=0
+	section_max	=0
 	
 	while next_offset < len(data):
 		magic	= struct.unpack('>4s', data[next_offset: next_offset +4])[0]
 
 		if (magic == b'MDF\0' or magic == b'mdf\0'):
 			# Write out the current section
-			print("Section", section, "Offset", start_offset, "Length", next_offset - start_offset)
 			write_mdf_section(filename + '.%4.4d' % section, data[start_offset : next_offset])
+			size = next_offset - start_offset
+			if (size > size_max):
+				size_max	= size
+				section_max	= section
 
 			# Increment the file section #
 			section += 1
@@ -41,8 +47,14 @@ def	split_mdf_file(filename):
 		# Check the next page
 		next_offset += page_size
 	else:
-		print("Section", section, "Offset", start_offset, "Length", next_offset - start_offset)
 		write_mdf_section(filename + '.%4.4d' % section, data[start_offset : next_offset])
+		size = next_offset - start_offset
+		if (size > size_max):
+			size_max	= size
+			section_max	= section
+	print("File %s" % filename)
+	print("Sections %d" % section)
+	print("Largest %d (%dM) @ %4.4d" % (size_max, size_max // 1024 // 1024, section_max))
 
 
 def	main():
