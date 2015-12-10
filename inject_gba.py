@@ -27,6 +27,12 @@ game_info = {
 		'offset':	38205440,
 		'length':	4847616,
 	},
+	'mm0':		{
+		'md5':		b'2a57596fbbb46a814231aaf16d8ab603',
+		'key':		b'30fb905c1f61c9ab01f92a6c71e2bb24927b7c188e858268105c541f03e0f24f8e7e56c908f1809345789848f80a17bb3c6c4945f10fa2741dd59545f1ce5132b375808e50671485a0013a179d09ddf5',
+		'offset':	31289344,
+		'length':	3676160,
+	},
 	'ff1':	{
 		'md5':		b'1690b5c5b4e7f00e2011b1fd91ca925d',
 		'key':		b'a762bbca183ae6fcb32cccfe58f41ac1562817704674d9e0293f1831809937174a7fbf42b47648c37793690f8faf353d9213e3009e7aecec8f4d2978f6080883e9b8ed1822616aeb18a82fddda046fb1',
@@ -134,7 +140,7 @@ def	injectFile(gameName, adbFilename, injectName):
 
 def	main():
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hla:emz", ["help", "list", "adb=", "extact", "ff1", "mario", "mm03", "zelda"])
+		opts, args = getopt.getopt(sys.argv[1:], "hla:emz", ["help", "list", "adb=", "extact", "ff1", "mario", "mm0", "mm03", "zelda"])
 	except getopt.GetoptError as err:
 		print(str(err))
 		sys.exit(2)
@@ -156,10 +162,12 @@ Usage: inject_gba.py [-h] [-l] [-a path/to/alldata.bin] [-m -z] [-e] [romfile] [
 -a	--adb		Set the path to your alldata.bin file
 			This will try to guess which key/offset/length to use.
 
--m	--mario		Try using the Mario & Luigi Superstar Saga key/offset/length
-	--mm03		Try using the Megaman Zero 3 key/offset/length
-	--ff1		Try using the Final Fight One key/offset/length
--z	--zelda		Try using the Zelda Minish Cap key/offset/length
+If the adb is not recognised, try using the key/offset/length from
+	--ff1		Final Fight One
+-m	--mario		Mario & Luigi Superstar Saga
+	--mm0		Megaman Zero
+	--mm03		Megaman Zero 3
+-z	--zelda		Zelda Minish Cap
 
 -e	--extract	Extract rom from the base game alldata.bin file to alldata.bin.gba
 
@@ -194,6 +202,8 @@ I can confirm C.O. Nell looks hawt on the big screen.
 			gameName	= 'mario'
 		elif o in ("-z", "--zelda"):
 			gameName	= 'zelda'
+		elif o in ("--mm0"):
+			gameName	= 'mm0'
 		elif o in ("--mm03"):
 			gameName	= 'mm03'
 		else:
