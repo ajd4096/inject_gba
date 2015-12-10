@@ -27,6 +27,12 @@ game_info = {
 		'offset':	38205440,
 		'length':	4847616,
 	},
+	'ff1':	{
+		'md5':		b'1690b5c5b4e7f00e2011b1fd91ca925d',
+		'key':		b'a762bbca183ae6fcb32cccfe58f41ac1562817704674d9e0293f1831809937174a7fbf42b47648c37793690f8faf353d9213e3009e7aecec8f4d2978f6080883e9b8ed1822616aeb18a82fddda046fb1',
+		'offset':	31680512,
+		'length':	2459648,
+	},
 }
 
 def	getGameInfo(gameName, adb_data):
@@ -126,38 +132,9 @@ def	injectFile(gameName, adbFilename, injectName):
 	open(injectName + '.adb', 'wb').write(adb_data)
 
 
-def	decodeChunkFile(gameName, chunkFilename):
-	if (not gameName in game_info):
-		print("Game %s not found" % gameName)
-		return
-	
-	gi = game_info[gameName]
-	gikey	= gi['key']
-	gioff	= gi['offset']
-	gilen	= gi['length']
-
-	key = bytearray(binascii.unhexlify(gikey))
-	key_len = len(key)
-
-	# Read in the file as a RW bytearray
-	print("Reading %s" % chunkFilename)
-	chunk_data = bytearray(open(chunkFilename, 'rb').read())
-
-	for offset in range(4, 88):
-		# For each byte, XOR in our key
-		# +8 = skip the MDF magic + unknown 
-		print("Decoding")
-		for i in range(len(chunk_data) -offset):
-			chunk_data[i +offset] ^= key[i % key_len]
-
-		# Write it out
-		print("Saving as %s.decoded" % chunkFilename)
-		open(chunkFilename + '.decoded.%2.2d' % offset, 'wb').write(chunk_data)
-
-
 def	main():
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hla:c:emz", ["help", "list", "adb=", "extact", "mario", "mm03", "zelda"])
+		opts, args = getopt.getopt(sys.argv[1:], "hla:emz", ["help", "list", "adb=", "extact", "ff1", "mario", "mm03", "zelda"])
 	except getopt.GetoptError as err:
 		print(str(err))
 		sys.exit(2)
@@ -166,7 +143,6 @@ def	main():
 	extract		= False
 	gameName	= ""
 	adbFilename	= ""
-	chunkFilename	= ""
 	for o, a in opts:
 		if o in ("-h", "--help"):
 			print(
@@ -181,8 +157,9 @@ Usage: inject_gba.py [-h] [-l] [-a path/to/alldata.bin] [-m -z] [-e] [romfile] [
 			This will try to guess which key/offset/length to use.
 
 -m	--mario		Try using the Mario & Luigi Superstar Saga key/offset/length
--z	--zelda		Try using the Zelda Minish Cap key/offset/length
 	--mm03		Try using the Megaman Zero 3 key/offset/length
+	--ff1		Try using the Final Fight One key/offset/length
+-z	--zelda		Try using the Zelda Minish Cap key/offset/length
 
 -e	--extract	Extract rom from the base game alldata.bin file to alldata.bin.gba
 
@@ -197,7 +174,7 @@ This will work if you are re-injecting into a modified adb, try using -e to veri
 
 The alldata.bin containing the injected file will be written to the same location as the .gba file with a .adb suffix
 
-The ROM must compress to < 8M (<4M for mm03)
+The ROM must compress to < 8M (<4M for mm03, <2M for ff1)
 Some 16M roms work, some don't.
 The other GBA VC titles are all <4M, so not worth using.
 
@@ -207,12 +184,12 @@ I can confirm C.O. Nell looks hawt on the big screen.
 			sys.exit(2)
 		elif o in ("-a", "--adb"):
 			adbFilename	= a
-		elif o in ("-c"):
-			chunkFilename	= a
 		elif o in ("-e", "--extract"):
 			extract = True
 		elif o in ("-l", "--list"):
 			showList = True
+		elif o in ("--ff1"):
+			gameName	= 'ff1'
 		elif o in ("-m", "--mario"):
 			gameName	= 'mario'
 		elif o in ("-z", "--zelda"):
@@ -231,9 +208,6 @@ I can confirm C.O. Nell looks hawt on the big screen.
 
 	if (extract and len(adbFilename)):
 		extractFile(gameName, adbFilename)
-
-	if (len(chunkFilename) and len(adbFilename)):
-		decodeChunkFile(gameName, chunkFilename)
 
 	if (len(adbFilename)):
 		for injectName in args:
