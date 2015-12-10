@@ -39,6 +39,24 @@ game_info = {
 		'offset':	31680512,
 		'length':	2459648,
 	},
+	'mmb':	{
+		'md5':		b'49bb5686aa22195e3a682f46d4509cd9',
+		'key':		b'35feb2a2c4a6b58db90ac748d434130b14ab3d70355164b1b37392eb881daa35fda5dd11963e7f8060d4087f53772dc16261511de040e5aeba938a2439f001c81468cd05b1b2bd184c11aa689798d414',
+		'offset':	32772096,
+		'length':	4806656,
+	},
+	'sma':	{
+		'md5':		b'e710b59d24961366aa2555f73d1da20e',
+		'key':		b'185beca1c044562426c05c1055cee69dc2a1cbae4fbadff752ee632b9437d1ba5bf6724dcfca8020a5455e2a34308c01626c4a253aa66a9f27f949c31e01d2e173bc426a402513ec2c489931e5fda468',
+		'offset':	34996224,
+		'length':	2158592,
+	},
+	'sma2':	{
+		'md5':		 b'068f944ca195e9fc2c7c71b895dbe0e9',
+		'key':		 b'4223ab619f717c96cb6dfe67d0571b2561e2c58caf00ced7856b72dd320a8b3a544900f55b2ecde723f050bebf75c9ab49d930353c4e2194db247d05ef7ff7e6daea0ebb2fb509267dd6e9d24c9dfe4e',
+		'offset':	 35704832,
+		'length':	 1568768,
+	},
 }
 
 def	getGameInfo(gameName, adb_data):
