@@ -57,10 +57,16 @@ game_info = {
 		'offset':	 35704832,
 		'length':	 1568768,
 	},
+	'sgg': {
+		'md5':		b'e27286ad6198e2c75caa07dd51c937f6',
+		'key':		b'15070b44ca537ebf19bca19f9fad4f54932ae8b2d54fabb964c8df6e0f5971041f65fa551b3184975333d30a68d524aa87c07dfb3de5ab3fbbc26f50ac2f269835fa0fe63d1efee50a85cb206dc052f9',
+		'offset':	32591872,
+		'length':	2291712,
+	},
 }
 
 def	getGameInfo(gameName, adb_data):
-	adb_md5 = hashlib.md5(adb_data).hexdigest()
+	adb_md5 = hashlib.md5(bytes(adb_data)).hexdigest()
 	#print("Info: adb md5 is %s" % adb_md5)
 
 	# Try to match by MD5
@@ -101,6 +107,7 @@ def	extractFile(gameName, adbFilename):
 	# +8 = skip the MDF magic + size
 	for i in range(len(data) -8):
 		data[i +8] ^= key[i % key_len]
+	#open(adbFilename + '.gba.x', 'wb').write(data[8:])
 
 	# Decompress the unobfuscated data
 	raw_data = zlib.decompress(bytes(data[8:]))
