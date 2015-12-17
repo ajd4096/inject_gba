@@ -45,7 +45,7 @@ def	get_largest_section(filename):
 	# Print some stats, formatted to paste into inject_gba.py
 	print("'md5': b'%s'," % hashlib.md5(data).hexdigest())
 	print("'offset': %d," % largest_section[0])
-	print("'length': %d," % largest_section[1])
+	print("'mdf_len': %d," % largest_section[1])
 
 	return data[largest_section[0] : largest_section[0] + largest_section[1]]
 
@@ -182,12 +182,13 @@ def	test_key(cipher_data, key):
 		xor_data[i] ^= key[i % len(key)]
 	# Try to uncompress it
 	try:
-		zlib.decompress(bytes(xor_data))
+		plain_data = zlib.decompress(bytes(xor_data))
 	except:
 		pass
 	else:
 		# It worked - return the key
 		print("'key': b'%s'," % binascii.hexlify(bytes(bytearray(key))))
+		print("'rom_len': %d," % len(plain_data))
 		return True
 	return False
 
