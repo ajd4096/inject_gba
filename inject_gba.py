@@ -180,21 +180,8 @@ def	injectFile(adbFilename, injectName):
 	#open(injectName + '.old', 'wb').write(old_rom)
 	#open(injectName + '.new', 'wb').write(new_rom)
 
-
-def	main():
-	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hla:e", ["help", "list", "adb=", "extact"])
-	except getopt.GetoptError as err:
-		print(str(err))
-		sys.exit(2)
-
-	showList	= False
-	extract		= False
-	adbFilename	= ""
-	for o, a in opts:
-		if o in ("-h", "--help"):
-			print(
-"""
+def	show_usage():
+	usage_text = """
 
 Usage: inject_gba.py [-h] [-l] [-a path/to/alldata.bin] [-e] [romfile] [romfile]
 
@@ -218,8 +205,24 @@ This takes a 16M rom, with the largest space in the alldata.bin file
 
 I can confirm C.O. Nell looks hawt on the big screen.
 
-""")
-			sys.exit(2)
+"""
+	print(usage_text)
+
+def	main():
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hla:e", ["help", "list", "adb=", "extact"])
+	except getopt.GetoptError as err:
+		print(str(err))
+		show_usage()
+		exit(1)
+
+	showList	= False
+	extract		= False
+	adbFilename	= ""
+	for o, a in opts:
+		if o in ("-h", "--help"):
+			show_usage()
+			exit(0)
 		elif o in ("-a", "--adb"):
 			adbFilename	= a
 		elif o in ("-e", "--extract"):
@@ -227,6 +230,7 @@ I can confirm C.O. Nell looks hawt on the big screen.
 		elif o in ("-l", "--list"):
 			showList = True
 		else:
+			show_usage()
 			assert False, "unhandled option"
 
 	if (showList):
