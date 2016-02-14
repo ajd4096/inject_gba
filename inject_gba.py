@@ -83,8 +83,9 @@ game_info = (
 )
 
 def	getGameInfo(adb_data):
-	adb_md5 = hashlib.md5(bytes(adb_data)).hexdigest()
-	#print("Info: adb md5 is %s" % adb_md5)
+	adb_md5 = hashlib.md5(bytes(adb_data)).hexdigest().encode('latin-1')
+	#print("Info: adb len is %d" % len(adb_data))
+	#print("Info: adb md5 is >%s<" % adb_md5)
 
 	# Try to match by MD5
 	for i in range(len(game_info)):
