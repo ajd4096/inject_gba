@@ -46,6 +46,11 @@ def	get_largest_section(filename):
 	print("'md5': b'%s'," % hashlib.md5(data).hexdigest())
 	print("'offset': %d," % largest_section[0])
 	print("'mdf_len': %d," % largest_section[1])
+	print("'adb_len': %d," % len(data))
+	# Get the MD5 of the ADB with the largest section zero'd
+	adb_copy = bytearray(data)
+	adb_copy[largest_section[0] : largest_section[0] + largest_section[1]] = bytearray(b'\x00' * largest_section[1])
+	print("'md5z': b'%s'," % hashlib.md5(bytes(adb_copy)).hexdigest())
 
 	return data[largest_section[0] : largest_section[0] + largest_section[1]]
 
