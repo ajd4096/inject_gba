@@ -252,84 +252,80 @@ class	PSB():
 							# get_xor_key will print the seed + key
 							get_xor_key(fi_name)
 							print('-')
-
-				# The rest I'm still exploring
-				elif ns == 'expire_suffix_list':
+				else:
 					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					#print(unpacker('<16B'))
-					t = unpacker('<B')[0]
-					entries2 = self.unpack_array(unpacker, t)
-					if entries2.offsets.count:
-						print(entries2)
-				elif ns == 'id':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					print(unpacker('<16B'))
-				elif ns == 'item':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					#print(unpacker('<16B'))
-					t = unpacker('<B')[0]
-					entries2 = self.unpack_array(unpacker, t)
-					if entries2.offsets.count:
-						print(entries2)
-					for j in range(0, entries2.names.count):
-						ni = entries2.names.values[j]
-						ns = self.names[ni]
-						o = entries2.offsets.values[j]
-						unpacker.seek(entries2.offsets.offset1 + o)
-						print(">> %d @0x%X %s" % (j, o, ns))
+					print("Danger, Will Robinson! Danger!")
+					print("I'm still exploring this entry type.")
+					# The rest I'm still exploring
+					if ns == 'expire_suffix_list':
+						unpacker.seek(self.entries.offsets.offset1 + o)
+						#print(unpacker('<16B'))
+						t = unpacker('<B')[0]
+						entries2 = self.unpack_array(unpacker, t)
+						if entries2.offsets.count:
+							print(entries2)
+					elif ns == 'id':
+						unpacker.seek(self.entries.offsets.offset1 + o)
 						print(unpacker('<16B'))
-				elif ns == 'message':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					#print(unpacker('<16B'))
-					t = unpacker('<B')[0]
-					entries2 = self.unpack_array(unpacker, t)
-					if entries2.offsets.count:
-						print(entries2)
-					for j in range(0, entries2.names.count):
-						ni = entries2.names.values[j]
-						ns = self.names[ni]
-						o = entries2.offsets.values[j]
-						unpacker.seek(entries2.offsets.offset1 + o)
-						print(">> %d @0x%X %s" % (j, o, ns))
+					elif ns == 'item':
+						unpacker.seek(self.entries.offsets.offset1 + o)
+						#print(unpacker('<16B'))
+						t = unpacker('<B')[0]
+						entries2 = self.unpack_array(unpacker, t)
+						if entries2.offsets.count:
+							print(entries2)
+						for j in range(0, entries2.names.count):
+							ni = entries2.names.values[j]
+							ns = self.names[ni]
+							o = entries2.offsets.values[j]
+							unpacker.seek(entries2.offsets.offset1 + o)
+							print(">> %d @0x%X %s" % (j, o, ns))
+							print(unpacker('<16B'))
+					elif ns == 'message':
+						unpacker.seek(self.entries.offsets.offset1 + o)
+						#print(unpacker('<16B'))
+						t = unpacker('<B')[0]
+						entries2 = self.unpack_array(unpacker, t)
+						if entries2.offsets.count:
+							print(entries2)
+						for j in range(0, entries2.names.count):
+							ni = entries2.names.values[j]
+							ns = self.names[ni]
+							o = entries2.offsets.values[j]
+							unpacker.seek(entries2.offsets.offset1 + o)
+							print(">> %d @0x%X %s" % (j, o, ns))
+							print(unpacker('<16B'))
+					elif ns == 'param':
+						unpacker.seek(self.entries.offsets.offset1 + o)
+						#print(unpacker('<16B'))
+						t = unpacker('<B')[0]
+						entries2 = self.unpack_array(unpacker, t)
+						if entries2.offsets.count:
+							print(entries2)
+						for j in range(0, entries2.names.count):
+							ni = entries2.names.values[j]
+							ns = self.names[ni]
+							o = entries2.offsets.values[j]
+							unpacker.seek(entries2.offsets.offset1 + o)
+							print(">> %d @0x%X %s" % (j, o, ns))
+							print(unpacker('<16B'))
+					elif ns == 'root':
+						unpacker.seek(self.entries.offsets.offset1 + o)
+						#print(unpacker('<16B'))
+						t = unpacker('<B')[0]
+						entries2 = self.unpack_array(unpacker, t)
+						if entries2.offsets.count:
+							print(entries2)
+						for j in range(0, entries2.names.count):
+							ni = entries2.names.values[j]
+							ns = self.names[ni]
+							o = entries2.offsets.values[j]
+							unpacker.seek(entries2.offsets.offset1 + o)
+							print(">> %d @0x%X %s" % (j, o, ns))
+							print(unpacker('<16B'))
+					elif ns == 'version':
+						unpacker.seek(self.entries.offsets.offset1 + o)
 						print(unpacker('<16B'))
-				elif ns == 'param':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					#print(unpacker('<16B'))
-					t = unpacker('<B')[0]
-					entries2 = self.unpack_array(unpacker, t)
-					if entries2.offsets.count:
-						print(entries2)
-					for j in range(0, entries2.names.count):
-						ni = entries2.names.values[j]
-						ns = self.names[ni]
-						o = entries2.offsets.values[j]
-						unpacker.seek(entries2.offsets.offset1 + o)
-						print(">> %d @0x%X %s" % (j, o, ns))
-						print(unpacker('<16B'))
-				elif ns == 'root':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					#print(unpacker('<16B'))
-					t = unpacker('<B')[0]
-					entries2 = self.unpack_array(unpacker, t)
-					if entries2.offsets.count:
-						print(entries2)
-					for j in range(0, entries2.names.count):
-						ni = entries2.names.values[j]
-						ns = self.names[ni]
-						o = entries2.offsets.values[j]
-						unpacker.seek(entries2.offsets.offset1 + o)
-						print(">> %d @0x%X %s" % (j, o, ns))
-						print(unpacker('<16B'))
-				elif ns == 'version':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					print(unpacker('<16B'))
 						
 		
 
