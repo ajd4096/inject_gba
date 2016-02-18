@@ -136,7 +136,7 @@ class	PSB():
 			o += "String %d %s\n" % (i, self.strings[i])
 		#o += "Chunk offsets %s\n" % str(self.chunk_offsets)
 		#o += "Chunk lengths %s\n" % str(self.chunk_offsets)
-		o += "Entries1 %s\n" % str(self.entries)
+		o += "Entries %s\n" % str(self.entries)
 		#for i in range(0, self.entries.names.count):
 		#	s = self.entries.names.values[i]
 		#	o += "%d %d %s\n" % (i, s, self.name[s])
@@ -625,7 +625,7 @@ def	extract_psb(psb_filename, bin_filename):
 		# Get the possibly-encrypted, possibly-compressed data
 		o = fi['offset']
 		l = fi['length']
-		# By inspection, this length does include the MDR header
+		# By inspection, this length does include the 'mdf\0' header
 		data = bytearray(bin_file_data[o : o + l])
 		if options.debug:
 			open(fn + ".0", 'wb').write(data)
