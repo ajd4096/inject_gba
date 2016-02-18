@@ -566,7 +566,8 @@ def	uncompress_data(data):
 	header = HDRLEN()
 	header.unpack(buffer_unpacker(data))
 
-	if header.signature == b'mdf\x00' and header.length > len(data):
+	if header.signature == b'mdf\x00':
+		# FIXME - need to test if the data really is compressed
 		# (Skip the 8 byte MDF header)
 		uncompressed = zlib.decompress(bytes(data[header.offset1 : ]))
 		if (len(uncompressed) != header.length):
@@ -574,8 +575,9 @@ def	uncompress_data(data):
 		if not options.quiet:
 			print("Uncompressed Length: %d" % len(uncompressed))
 		return uncompressed
-
-	return data
+	else:
+		# Return the data as-is
+		return data
 
 def	extract_psb(psb_filename, bin_filename):
 
