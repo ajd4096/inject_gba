@@ -277,11 +277,11 @@ class	PSB():
 				print(">>> %s @0x%X type %d value %d '%s'" % (name, offset, t, v, vs))
 			return vs
 		elif t == 25:
-			# by inspection, length=1, purpose unknown
+			# by inspection, length=1, index into chunk data
 			t = unpacker('<B')[0]
 			v = unpacker('<B')[0]
 			if options.verbose:
-				print(">>> %s @0x%X type %d value %d 0x%X ?" % (name, offset, t, v, v))
+				print(">>> %s @0x%X type %d value chunk %d" % (name, offset, t, v))
 			return v
 		elif t == 29:
 			# by inspection, length=0, purpose unknown, seems to be followed by a type 21
