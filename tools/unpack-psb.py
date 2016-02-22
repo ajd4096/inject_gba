@@ -611,6 +611,8 @@ def	extract_psb(psb_filename, bin_filename):
 		if options.verbose:
 			print("Reading file %s" % bin_filename)
 		bin_file_data = bytearray(open(bin_filename, 'rb').read())
+	else:
+		bin_file_data = None
 
 	psb = PSB()
 	psb.unpack(buffer_unpacker(psb_file_data), psb_filename, bin_file_data)
