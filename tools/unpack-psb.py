@@ -60,14 +60,13 @@ class	buffer_unpacker():
 	def	data(self):
 		return self._buffer[self._offset : ]
 
+	# For debugging, get the next output then reset the offset
+	def	peek(self, fmt):
+		off = self.tell()
+		out = self(fmt)
+		self.seek(off)
+		return out
 
-game_info = (
-        {
-                'name':         b'WiiU',
-	},
-);
-
- 
 # mdf\0
 # PSB\0
 class	HDRLEN():
@@ -118,8 +117,7 @@ class	PSB():
 		self.strings		= [] 
 		self.chunk_offsets	= PSB_ARRAY()
 		self.chunk_lengths	= PSB_ARRAY()
-		self.entries		= {}
-		self.file_info		= None
+		self.entries		= None
 		self.file_data		= []
 
 	def	__str__(self):
@@ -146,7 +144,14 @@ class	PSB():
 		return o
 
 	def	unpack(self, unpacker):
+		if options.verbose:
+			print("Parsing header:")
+			l = len(unpacker.data())
+			print("PSB data length %d 0x%X" % (l, l))
+
 		self.header.unpack(unpacker)
+		if options.verbose:
+			print(self.header)
 
 		# Read in the arrays of names
 		# These are a complex structure used to remove duplicate prefixes of the file names
@@ -178,7 +183,7 @@ class	PSB():
 			d = unpacker.data();
 			for j in range(0, len(d)):
 				if d[j] == 0:
-					s = ctypes.create_unicode_buffer(str(d[:j])).value
+					s = d[:j].decode('utf-8')
 					self.strings.append(s)
 					if options.verbose:
 						print("String %d  @0x%X %s" % (i, o, s))
@@ -187,168 +192,146 @@ class	PSB():
 		# Unused - this is empty
 		unpacker.seek(self.header.offset_chunk_offsets)
 		self.chunk_offsets.unpack(unpacker)
+		print("Chunk offsets count %d" % self.chunk_offsets.count)
+		for i in range(0, self.chunk_offsets.count):
+			print("Chunk offset %d = %d 0x%X" % (i, self.chunk_offsets.values[i], self.chunk_offsets.values[i]))
+
 
 		# Unused - this is empty
 		unpacker.seek(self.header.offset_chunk_lengths)
 		self.chunk_lengths.unpack(unpacker)
+		print("Chunk lengths count %d" % self.chunk_lengths.count)
+		for i in range(0, self.chunk_offsets.count):
+			print("Chunk length %d = %d 0x%X" % (i, self.chunk_lengths.values[i], self.chunk_lengths.values[i]))
 
-		# Read in our list of entries
-		unpacker.seek(self.header.offset_entries)
-		t = unpacker('<B')[0]
-		self.entries = self.unpack_array(unpacker, t)
+		# Read in our tree of entries
+		self.entries = self.unpack_object(unpacker, "entries", self.header.offset_entries)
 
-		if (isinstance(self.entries, PSB_OFFSET)):
-			print("Entries array contains offsets without names")
-		elif (isinstance(self.entries, PSB_NAMEOFFSET)):
-			# Main alldata.psb.m has:
-			# expire_suffix_list (points to empty list)
-			# file_info (one per file)
-			# id ??
-			# version ??
-			if options.verbose:
-				print("Names in entries array (%d):" % self.entries.names.count)
-				for i in range(0, self.entries.names.count):
-					ni = self.entries.names.values[i]
-					ns = self.names[ni]
-					o = self.entries.offsets.values[i]
-					print("> %d 0x%X %s" % (i, o, ns))
-			if not options.quiet:
-				print("Parsing entries array (%d):" % self.entries.names.count)
-			for i in range(0, self.entries.names.count):
-				ni = self.entries.names.values[i]
-				ns = self.names[ni]
-				o = self.entries.offsets.values[i]
-				# I know file_info for sure
-				if ns == 'file_info':
-					print("> %d 0x%X %s" % (i, o, ns))
-					unpacker.seek(self.entries.offsets.offset1 + o)
-					t = unpacker('<B')[0]
-					self.file_info  = self.unpack_array(unpacker, t)
-					#print(self.file_info)
-
-					for fii in range(0, self.file_info.names.count):
-						fi_offset	= self.file_info.offsets.values[fii]
-						fi_ni		= self.file_info.names.values[fii]
-						fi_name		= self.names[fi_ni]
-						# Each file has a two element array of offsets to packed 'numbers'
-						unpacker.seek(self.file_info.offsets.offset1 + fi_offset)
-						t = unpacker('<B')[0]
-						offsets = self.unpack_array(unpacker, t)
-						# The 1st is the offset within ADB
-						unpacker.seek(offsets.offsets.offset1 + offsets.offsets.values[0])
-						bin_offset = self.unpack_number(unpacker)
-						# The 2nd is the compressed length
-						unpacker.seek(offsets.offsets.offset1 + offsets.offsets.values[1])
-						bin_length = self.unpack_number(unpacker)
-						#print("Offset 0x%X" % bin_offset)
-						#print("Length %d 0x%X" % (bin_length, bin_length))
-						# Append a dict of (filename, offset, length)
-						self.file_data.append({ 'name': fi_name, 'offset': bin_offset, 'length': bin_length})
-						if options.verbose and not options.bin:
-							print("File %d" % fii)
-							print("Name: %s" % fi_name)
-							print("Offset: 0x%X" % bin_offset)
-							print("Compressed Length: %d (0x%X)" % (bin_length, bin_length))
-							# get_xor_key will print the seed + key
-							get_xor_key(fi_name)
-							print('-')
-				else:
-					print("> %d 0x%X %s" % (i, o, ns))
-					print("Danger, Will Robinson! Danger!")
-					print("I'm still exploring this entry type.")
-					# The rest I'm still exploring
-					if ns == 'expire_suffix_list':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						#print(unpacker('<16B'))
-						t = unpacker('<B')[0]
-						entries2 = self.unpack_array(unpacker, t)
-						if entries2.offsets.count:
-							print(entries2)
-					elif ns == 'id':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						print(unpacker('<16B'))
-					elif ns == 'item':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						#print(unpacker('<16B'))
-						t = unpacker('<B')[0]
-						entries2 = self.unpack_array(unpacker, t)
-						if entries2.offsets.count:
-							print(entries2)
-						for j in range(0, entries2.names.count):
-							ni = entries2.names.values[j]
-							ns = self.names[ni]
-							o = entries2.offsets.values[j]
-							unpacker.seek(entries2.offsets.offset1 + o)
-							print(">> %d @0x%X %s" % (j, o, ns))
-							print(unpacker('<16B'))
-					elif ns == 'message':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						#print(unpacker('<16B'))
-						t = unpacker('<B')[0]
-						entries2 = self.unpack_array(unpacker, t)
-						if entries2.offsets.count:
-							print(entries2)
-						for j in range(0, entries2.names.count):
-							ni = entries2.names.values[j]
-							ns = self.names[ni]
-							o = entries2.offsets.values[j]
-							unpacker.seek(entries2.offsets.offset1 + o)
-							print(">> %d @0x%X %s" % (j, o, ns))
-							print(unpacker('<16B'))
-					elif ns == 'param':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						#print(unpacker('<16B'))
-						t = unpacker('<B')[0]
-						entries2 = self.unpack_array(unpacker, t)
-						if entries2.offsets.count:
-							print(entries2)
-						for j in range(0, entries2.names.count):
-							ni = entries2.names.values[j]
-							ns = self.names[ni]
-							o = entries2.offsets.values[j]
-							unpacker.seek(entries2.offsets.offset1 + o)
-							print(">> %d @0x%X %s" % (j, o, ns))
-							print(unpacker('<16B'))
-					elif ns == 'root':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						#print(unpacker('<16B'))
-						t = unpacker('<B')[0]
-						entries2 = self.unpack_array(unpacker, t)
-						if entries2.offsets.count:
-							print(entries2)
-						for j in range(0, entries2.names.count):
-							ni = entries2.names.values[j]
-							ns = self.names[ni]
-							o = entries2.offsets.values[j]
-							unpacker.seek(entries2.offsets.offset1 + o)
-							print(">> %d @0x%X %s" % (j, o, ns))
-							print(unpacker('<16B'))
-					elif ns == 'version':
-						unpacker.seek(self.entries.offsets.offset1 + o)
-						print(unpacker('<16B'))
-						
-		
-
-	def	unpack_number(self, unpacker):
-		type_to_kind = [0, 1, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 0xA, 0xB, 0xC];
-		type = unpacker('<B')[0]
-		kind = type_to_kind[type]
-		v = 0
-		if (kind == 1):
+	#
+	# based on exm2lib get_number()
+	#
+	def	unpack_object(self, unpacker, name, offset):
+		#print(">>> %s @0x%X" % (name, offset))
+		unpacker.seek(offset)
+		t = unpacker.peek('<B')[0]
+		if t >= 1 and t <= 3:
+			# from exm2lib & inspection, length = 0, purpose unknown
+			t = unpacker('<B')[0]
 			v = 0
-		elif kind == 2:
-			v = 1
-		elif kind == 3:
-			n = type - 4
-			v = int.from_bytes(unpacker('<%dB' % n), 'little')
-		elif kind == 9 and type == 0x1E:
-			v = unpacker('f')
-		elif kind == 10:
-			v = unpacker('d')
+			if options.verbose:
+				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
+			return v
+		if t == 4:
+			# from exm2lib & inspection, length = 0
+			# Used as a number, eg offset of file_info chunk
+			t = unpacker('<B')[0]
+			v = 0
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
+			return v
+		elif t >= 5 and t <= 8:
+			# from exm2lib, 1 to 4 byte int
+			t = unpacker('<B')[0]
+			v = int.from_bytes(unpacker('<%dB' % (t - 4)), 'little')
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
+			return v
+		elif t == 9:
+			# by inspection, length=5
+			# I've only seen these values, all would fit in 4 bytes
+			# This suggests a bitmask rather than a negative number
+			#    176  4294967042 0xFFFFFF02
+			#    176  4294967292 0xFFFFFFFC
+			#     44  4294967295 0xFFFFFFFF
+			#print(unpacker.peek('<16B'))
+			t = unpacker('<B')[0]
+			v = int.from_bytes(unpacker('<%dB' % 5), 'little')
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
+			return v
+		elif t == 21:
+			# by inspection, length=1, index into strings array
+			t = unpacker('<B')[0]
+			v = unpacker('<B')[0]
+			vs = self.strings[v]
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %d '%s'" % (name, offset, t, v, vs))
+			return vs
+		elif t == 22:
+			# by inspection, length=2, index into strings array
+			t = unpacker('<B')[0]
+			v = unpacker('<H')[0]
+			vs = self.strings[v]
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %d '%s'" % (name, offset, t, v, vs))
+			return vs
+		elif t == 25:
+			# by inspection, length=1, purpose unknown
+			t = unpacker('<B')[0]
+			v = unpacker('<B')[0]
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %d 0x%X ?" % (name, offset, t, v, v))
+			return v
+		elif t == 29:
+			# by inspection, length=0, purpose unknown, seems to be followed by a type 21
+			t = unpacker('<B')[0]
+			if options.verbose:
+				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
+			return None
+		elif t == 30:
+			# from exm2lib, 4 byte float
+			t = unpacker('<B')[0]
+			v = unpacker('f')[0]
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
+			return v
+		elif t == 31:
+			# from exm2lib, 8 byte float
+			t = unpacker('<B')[0]
+			v = unpacker('d')[0]
+			if options.verbose:
+				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
+			return v
+		elif t == 32:
+			# from exm2lib, array of offsets
+			t = unpacker('<B')[0]
+			offsets = PSB_ARRAY()
+			offsets.unpack(unpacker)
+			v = []
+			if options.verbose:
+				print(">>> %s @0x%X (%d entries)" % (name, offset, offsets.count))
+			for i in range(0, offsets.count):
+				o = offsets.values[i]
+				if options.verbose:
+					print(">>> %s @0x%X entry %d:" % (name, offset, i))
+				v1 = self.unpack_object(unpacker, name + "|%d" % i, offsets.offset1 + o)
+				v.append(v1)
+			return v
+		elif t == 33:
+			# from exm2lib, array of names, array of offsets
+			t = unpacker('<B')[0]
+			names = PSB_ARRAY()
+			names .unpack(unpacker)
+			offsets = PSB_ARRAY()
+			offsets.unpack(unpacker)
+			v = []
+			if options.verbose:
+				print(">>> %s @0x%X (%d entries)" % (name, offset, names.count))
+			for i in range(0, names.count):
+				ni = names.values[i]
+				ns = self.names[ni]
+				o = offsets.values[i]
+				if options.verbose:
+					print(">>> %s @0x%X entry %d:" % (name, offset, i))
+				v1 = self.unpack_object(unpacker, name + "|%s" % ns, offsets.offset1 + o)
+				v.append((ns, v1))
+				if name == 'entries|file_info':
+					self.file_data.append({ 'name': ns, 'offset': v1[0], 'length': v1[1]})
+			return v
 		else:
-			print("Unsupported packed number 0x%X" % type)
-			assert(False)
-		return v
+			print(">>> %s @0x%X" % (name, offset))
+			print("Unknown type")
+			print(unpacker.peek('<16B'))
 
 	# Copied from exm2lib
 	def	get_name(self, index):
@@ -369,20 +352,6 @@ class	PSB():
 			b = c
 			accum = chr(e) + accum
 		return accum
-
-	def	unpack_array(self, unpacker, t):
-		if (t == 0x20):
-			v = PSB_OFFSET()
-			v.unpack(unpacker)
-			return v
-		elif (t == 0x21):
-			v = PSB_NAMEOFFSET()
-			v.unpack(unpacker)
-			return v
-		else:
-			print("Unknown type 0x%X" % t)
-			assert(False)
-		return None
 
 class	PSB_HDR():
 	def	__init__(self):
@@ -423,34 +392,6 @@ class	PSB_HDR():
 		self.offset_chunk_lengths	= unpacker('<I')[0]
 		self.offset_chunk_data		= unpacker('<I')[0]
 		self.offset_entries		= unpacker('<I')[0]
-
-class	PSB_NAMEOFFSET():
-	def	__init__(self):
-		self.names	= PSB_ARRAY()
-		self.offsets	= PSB_ARRAY()
-
-	def	__str__(self):
-		o = "Array of name+offset:\n"
-		o += "Names %s\n" % str(self.names)
-		o += "Offsets %s\n" % str(self.offsets)
-		return o
-
-	def	unpack(self, unpacker):
-		self.names.unpack(unpacker)
-		self.offsets.unpack(unpacker)
-
-class	PSB_OFFSET():
-	def	__init__(self):
-		self.offsets	= PSB_ARRAY()
-
-	def	__str__(self):
-		o = "Array of offsets:\n"
-		o += "Offsets %s\n" % str(self.offsets)
-		return o
-
-	def	unpack(self, unpacker):
-		self.offsets.unpack(unpacker)
-
 
 class	PSB_ARRAY():
 	def	__init__(self):
@@ -493,6 +434,13 @@ class	PSB_ARRAY():
 			self.values.extend(v)
 		elif self.value_length == 2:
 			v = unpacker('<%dH' % self.count)
+			self.values.extend(v)
+		elif self.value_length == 3:
+			for i in range(0, self.count):
+				v = int.from_bytes(unpacker('<3B'), 'little')
+				self.values.append(v)
+		elif self.value_length == 4:
+			v = unpacker('<%dI' % self.count)
 			self.values.extend(v)
 		else:
 			print("Unknown value length %d" % self.value_length)
@@ -573,7 +521,7 @@ def	uncompress_data(data):
 		if (len(uncompressed) != header.length):
 			print("Warning: uncompressed length %d does not match header length %d" % (len(uncompressed), header.length))
 		if not options.quiet:
-			print("Uncompressed Length: %d" % len(uncompressed))
+			print("Uncompressed Length: %d 0x%X" % (len(uncompressed), len(uncompressed)))
 		return uncompressed
 	else:
 		# Return the data as-is
@@ -602,7 +550,19 @@ def	extract_psb(psb_filename, bin_filename):
 	psb = PSB()
 	psb.unpack(buffer_unpacker(psb_file_data))
 
+
 	if not bin_filename:
+		print("File count %d" % len(psb.file_data))
+		print("-")
+		for i in range(0, len(psb.file_data)):
+			fi	= psb.file_data[i]
+			fn	= "file.%4.4d" % i
+			print("File %d" % i)
+			print("Name: %s" % fi['name'])
+			if not options.quiet:
+				print("Offset: 0x%X" % fi['offset'])
+				print("Compressed Length: %d (0x%X)" % (fi['length'], fi['length']))
+			print("-")
 		return
 
 	if len(psb.file_data) == 0:
