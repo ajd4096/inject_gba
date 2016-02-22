@@ -143,7 +143,7 @@ class	PSB():
 			o += "%d 0x%X %d %s\n" % (i, fi['offset'], fi['length'], fi['name'])
 		return o
 
-	def	unpack(self, unpacker):
+	def	unpack(self, unpacker, name):
 		if options.verbose:
 			print("Parsing header:")
 			l = len(unpacker.data())
@@ -189,7 +189,7 @@ class	PSB():
 						print("String %d  @0x%X %s" % (i, o, s))
 					break
 
-		# Unused - this is empty
+		# This may be empty
 		unpacker.seek(self.header.offset_chunk_offsets)
 		self.chunk_offsets.unpack(unpacker)
 		print("Chunk offsets count %d" % self.chunk_offsets.count)
@@ -197,12 +197,23 @@ class	PSB():
 			print("Chunk offset %d = %d 0x%X" % (i, self.chunk_offsets.values[i], self.chunk_offsets.values[i]))
 
 
-		# Unused - this is empty
+		# This may be empty
 		unpacker.seek(self.header.offset_chunk_lengths)
 		self.chunk_lengths.unpack(unpacker)
 		print("Chunk lengths count %d" % self.chunk_lengths.count)
 		for i in range(0, self.chunk_offsets.count):
 			print("Chunk length %d = %d 0x%X" % (i, self.chunk_lengths.values[i], self.chunk_lengths.values[i]))
+
+		# If we have chunk data, split it out
+		if options.chunk:
+			if self.chunk_offsets.count > 0 and self.header.offset_chunk_data < len(unpacker.data()):
+				for i in range(0, self.chunk_offsets.count):
+					o = self.chunk_offsets.values[i]
+					l = self.chunk_lengths.values[i]
+					unpacker.seek(self.header.offset_chunk_data + o)
+					d = unpacker.data()[:l]
+					open(name + '.chunk.%4.4d' % i, 'wb').write(d)
+
 
 		# Read in our tree of entries
 		self.entries = self.unpack_object(unpacker, "entries", self.header.offset_entries)
@@ -548,7 +559,7 @@ def	extract_psb(psb_filename, bin_filename):
 		return
 
 	psb = PSB()
-	psb.unpack(buffer_unpacker(psb_file_data))
+	psb.unpack(buffer_unpacker(psb_file_data), psb_filename)
 
 
 	if not bin_filename:
@@ -622,8 +633,13 @@ Examples:
 
 %prog -b alldata.bin alldata.psb.m\tExtract the contents of alldata.bin into file.0000 etc
 
+%prog -v file.NNNN\t\t\tVerbosely list the contents of PSB file.NNNN
+
+%prog -c file.NNNN\t\t\tExtract chunk data from PSB file.NNNN
+
 """)
 	parser.add_option('-b', '--bin',	dest='bin',		help='set path to alldata.bin to FILE',		metavar='FILE',		default=None)
+	parser.add_option('-c', '--chunk',	dest='chunk',		help='write chunk files',			action='store_true',	default=False)
 	parser.add_option('-d', '--debug',	dest='debug',		help='write debug files',			action='store_true',	default=False)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
