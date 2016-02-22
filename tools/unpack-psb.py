@@ -3,6 +3,8 @@
 import	binascii
 import	ctypes
 import	hashlib
+import	html
+import	json
 import	mt19937
 import	optparse
 import	os
@@ -108,6 +110,7 @@ struct PSBHDR {
 
 class	PSB():
 	def	__init__(self):
+		self.bin_data		= None
 		self.header		= PSB_HDR()
 		self.str1		= PSB_ARRAY()
 		self.str2		= PSB_ARRAY()
@@ -117,6 +120,7 @@ class	PSB():
 		self.strings		= [] 
 		self.chunk_offsets	= PSB_ARRAY()
 		self.chunk_lengths	= PSB_ARRAY()
+		self.chunk_data		= []
 		self.entries		= None
 		self.file_data		= []
 
@@ -143,13 +147,20 @@ class	PSB():
 			o += "%d 0x%X %d %s\n" % (i, fi['offset'], fi['length'], fi['name'])
 		return o
 
-	def	unpack(self, unpacker, name):
+	def	unpack(self, unpacker, name, bin_data = None):
 		if options.verbose:
 			print("Parsing header:")
 			l = len(unpacker.data())
 			print("PSB data length %d 0x%X" % (l, l))
 
+		self.bin_data = bin_data
+
 		self.header.unpack(unpacker)
+		if self.header.signature != b'PSB\x00':
+			if options.debug:
+				print("Not a PSB file")
+				print(self.header.signature)
+			return
 		if options.verbose:
 			print(self.header)
 
@@ -192,31 +203,36 @@ class	PSB():
 		# This may be empty
 		unpacker.seek(self.header.offset_chunk_offsets)
 		self.chunk_offsets.unpack(unpacker)
-		print("Chunk offsets count %d" % self.chunk_offsets.count)
-		for i in range(0, self.chunk_offsets.count):
-			print("Chunk offset %d = %d 0x%X" % (i, self.chunk_offsets.values[i], self.chunk_offsets.values[i]))
+		if options.verbose:
+			print("Chunk offsets count %d" % self.chunk_offsets.count)
+			for i in range(0, self.chunk_offsets.count):
+				print("Chunk offset %d = %d 0x%X" % (i, self.chunk_offsets.values[i], self.chunk_offsets.values[i]))
 
 
 		# This may be empty
 		unpacker.seek(self.header.offset_chunk_lengths)
 		self.chunk_lengths.unpack(unpacker)
-		print("Chunk lengths count %d" % self.chunk_lengths.count)
-		for i in range(0, self.chunk_offsets.count):
-			print("Chunk length %d = %d 0x%X" % (i, self.chunk_lengths.values[i], self.chunk_lengths.values[i]))
+		if options.verbose:
+			print("Chunk lengths count %d" % self.chunk_lengths.count)
+			for i in range(0, self.chunk_lengths.count):
+				print("Chunk length %d = %d 0x%X" % (i, self.chunk_lengths.values[i], self.chunk_lengths.values[i]))
 
 		# If we have chunk data, split it out
-		if options.chunk:
-			if self.chunk_offsets.count > 0 and self.header.offset_chunk_data < len(unpacker.data()):
-				for i in range(0, self.chunk_offsets.count):
-					o = self.chunk_offsets.values[i]
-					l = self.chunk_lengths.values[i]
-					unpacker.seek(self.header.offset_chunk_data + o)
-					d = unpacker.data()[:l]
+		if self.chunk_offsets.count > 0 and self.header.offset_chunk_data < len(unpacker.data()):
+			for i in range(0, self.chunk_offsets.count):
+				o = self.chunk_offsets.values[i]
+				l = self.chunk_lengths.values[i]
+				unpacker.seek(self.header.offset_chunk_data + o)
+				d = unpacker.data()[:l]
+				self.chunk_data.append(d)
+				if options.chunk:
 					open(name + '.chunk.%4.4d' % i, 'wb').write(d)
-
 
 		# Read in our tree of entries
 		self.entries = self.unpack_object(unpacker, "entries", self.header.offset_entries)
+
+	def	print_json(self, file):
+		print(json.dump(self.entries, file, indent=1))
 
 	#
 	# based on exm2lib get_number()
@@ -231,7 +247,7 @@ class	PSB():
 			v = 0
 			if options.verbose:
 				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
-			return v
+			return {'type':t}
 		if t == 4:
 			# from exm2lib & inspection, length = 0
 			# Used as a number, eg offset of file_info chunk
@@ -239,14 +255,14 @@ class	PSB():
 			v = 0
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
-			return v
+			return {'type':t, 'value':0}
 		elif t >= 5 and t <= 8:
 			# from exm2lib, 1 to 4 byte int
 			t = unpacker('<B')[0]
 			v = int.from_bytes(unpacker('<%dB' % (t - 4)), 'little')
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
-			return v
+			return {'type':t, 'value':v}
 		elif t == 9:
 			# by inspection, length=5
 			# I've only seen these values, all would fit in 4 bytes
@@ -259,7 +275,7 @@ class	PSB():
 			v = int.from_bytes(unpacker('<%dB' % 5), 'little')
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
-			return v
+			return {'type':t, 'value':v}
 		elif t == 21:
 			# by inspection, length=1, index into strings array
 			t = unpacker('<B')[0]
@@ -267,7 +283,7 @@ class	PSB():
 			vs = self.strings[v]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %d '%s'" % (name, offset, t, v, vs))
-			return vs
+			return {'type':t, 'value':vs}
 		elif t == 22:
 			# by inspection, length=2, index into strings array
 			t = unpacker('<B')[0]
@@ -275,34 +291,37 @@ class	PSB():
 			vs = self.strings[v]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %d '%s'" % (name, offset, t, v, vs))
-			return vs
+			return {'type':t, 'value':vs}
 		elif t == 25:
 			# by inspection, length=1, index into chunk data
 			t = unpacker('<B')[0]
 			v = unpacker('<B')[0]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value chunk %d" % (name, offset, t, v))
-			return v
+			# PSB contains just the index into the chunk array
+			#return {'type':t, 'value':v}
+			# But we will also return the chunk data
+			return {'type':t, 'value':v, 'data': binascii.b2a_base64(self.chunk_data[v]).decode('utf-8') }
 		elif t == 29:
 			# by inspection, length=0, purpose unknown, seems to be followed by a type 21
 			t = unpacker('<B')[0]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
-			return None
+			return {'type':t}
 		elif t == 30:
 			# from exm2lib, 4 byte float
 			t = unpacker('<B')[0]
 			v = unpacker('f')[0]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
-			return v
+			return {'type':t, 'value':v}
 		elif t == 31:
 			# from exm2lib, 8 byte float
 			t = unpacker('<B')[0]
 			v = unpacker('d')[0]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
-			return v
+			return {'type':t, 'value':v}
 		elif t == 32:
 			# from exm2lib, array of offsets
 			t = unpacker('<B')[0]
@@ -317,7 +336,7 @@ class	PSB():
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
 				v1 = self.unpack_object(unpacker, name + "|%d" % i, offsets.offset1 + o)
 				v.append(v1)
-			return v
+			return {'type':t, 'value':(v)}
 		elif t == 33:
 			# from exm2lib, array of names, array of offsets
 			t = unpacker('<B')[0]
@@ -334,11 +353,41 @@ class	PSB():
 				o = offsets.values[i]
 				if options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
+				# Unpack the object at the offset
 				v1 = self.unpack_object(unpacker, name + "|%s" % ns, offsets.offset1 + o)
-				v.append((ns, v1))
 				if name == 'entries|file_info':
-					self.file_data.append({ 'name': ns, 'offset': v1[0], 'length': v1[1]})
-			return v
+					# If we're a file_info list
+					# v1['type'] == 32
+					# v1['value'] = list of type/value pairs
+					# list index 0 = offset
+					# list index 1 = length
+					fo = v1['value'][0]['value']
+					fl = v1['value'][1]['value']
+					self.file_data.append({ 'name': ns, 'offset': fo, 'length': fl})
+					# If we have the alldata.bin file and we're converting...
+					if self.bin_data and options.json:
+						# Extract the data chunk
+						fd = self.bin_data[fo : fo + fl]
+						# Unobfuscate the data using the filename for the seed
+						unobfuscate_data(fd, ns)
+						# Decompress the data
+						fd = uncompress_data(fd)
+						# Try to parse it as a PSB
+						psb = PSB()
+						psb.unpack(buffer_unpacker(fd), ns)
+						if psb.header.signature == b'PSB\x00':
+							# FIXME - some sub-PSBs have strings but no entries
+							v2 = { 'type':100, 'entries':psb.entries }
+						else:
+							v2 = { 'type':100, 'data': binascii.b2a_base64(fd).decode('utf-8') }
+						# Append our file data entry instead of the list32
+						v.append((ns, v2))
+					else:
+						v.append((ns, v1))
+				else:
+					v.append((ns, v1))
+			return {'type':t, 'value':(v)}
+
 		else:
 			print(">>> %s @0x%X" % (name, offset))
 			print("Unknown type")
@@ -531,7 +580,7 @@ def	uncompress_data(data):
 		uncompressed = zlib.decompress(bytes(data[header.offset1 : ]))
 		if (len(uncompressed) != header.length):
 			print("Warning: uncompressed length %d does not match header length %d" % (len(uncompressed), header.length))
-		if not options.quiet:
+		if options.verbose:
 			print("Uncompressed Length: %d 0x%X" % (len(uncompressed), len(uncompressed)))
 		return uncompressed
 	else:
@@ -558,11 +607,19 @@ def	extract_psb(psb_filename, bin_filename):
 		print("PSB header not found")
 		return
 
+	if bin_filename:
+		if options.verbose:
+			print("Reading file %s" % bin_filename)
+		bin_file_data = bytearray(open(bin_filename, 'rb').read())
+
 	psb = PSB()
-	psb.unpack(buffer_unpacker(psb_file_data), psb_filename)
+	psb.unpack(buffer_unpacker(psb_file_data), psb_filename, bin_file_data)
 
+	if options.json:
+		j = open(options.json, 'wt')
+		psb.print_json(j)
 
-	if not bin_filename:
+	if options.split:
 		print("File count %d" % len(psb.file_data))
 		print("-")
 		for i in range(0, len(psb.file_data)):
@@ -573,50 +630,29 @@ def	extract_psb(psb_filename, bin_filename):
 			if not options.quiet:
 				print("Offset: 0x%X" % fi['offset'])
 				print("Compressed Length: %d (0x%X)" % (fi['length'], fi['length']))
+
+			# Get the possibly-encrypted, possibly-compressed data
+			o = fi['offset']
+			l = fi['length']
+			# By inspection, this length does include the 'mdf\0' header
+			data = bytearray(bin_file_data[o : o + l])
+			if options.debug:
+				open(fn + ".0", 'wb').write(data)
+			if not options.quiet:
+				print("Length: %d" % len(data))
+
+			unobfuscate_data(data, fi['name'])
+			if options.debug:
+				open(fn + ".1", 'wb').write(data)
+
+			data = uncompress_data(data)
+			if options.debug:
+				open(fn + ".2", 'wb').write(data)
+
+			# Write out the final file
+			open(fn, 'wb').write(data)
+
 			print("-")
-		return
-
-	if len(psb.file_data) == 0:
-		print("No files found in PSB")
-		return
-
-	if options.verbose:
-		print("Reading file %s" % bin_filename)
-	bin_file_data = bytearray(open(bin_filename, 'rb').read())
-
-	print("File count %d" % len(psb.file_data))
-	print("-")
-	for i in range(0, len(psb.file_data)):
-		fi	= psb.file_data[i]
-		fn	= "file.%4.4d" % i
-		print("File %d" % i)
-		print("Name: %s" % fi['name'])
-		if not options.quiet:
-			print("Offset: 0x%X" % fi['offset'])
-			print("Compressed Length: %d (0x%X)" % (fi['length'], fi['length']))
-
-		# Get the possibly-encrypted, possibly-compressed data
-		o = fi['offset']
-		l = fi['length']
-		# By inspection, this length does include the 'mdf\0' header
-		data = bytearray(bin_file_data[o : o + l])
-		if options.debug:
-			open(fn + ".0", 'wb').write(data)
-		if not options.quiet:
-			print("Length: %d" % len(data))
-
-		unobfuscate_data(data, fi['name'])
-		if options.debug:
-			open(fn + ".1", 'wb').write(data)
-
-		data = uncompress_data(data)
-		if options.debug:
-			open(fn + ".2", 'wb').write(data)
-
-		# Write out the final file
-		open(fn, 'wb').write(data)
-
-		print("-")
 
 def	main():
 	# Make our CLI options global so we don't have to pass them around.
@@ -631,7 +667,9 @@ def	main():
 Examples:
 %prog -v alldata.psb.m\t\t\tVerbosely list the contents of alldata.psb.m
 
-%prog -b alldata.bin alldata.psb.m\tExtract the contents of alldata.bin into file.0000 etc
+%prog -s -b alldata.bin alldata.psb.m\tSplit alldata.bin into file.0000 etc
+
+%prog -j output.json -b alldata.bin alldata.psb.m\tConvert to JSON (huge)
 
 %prog -v file.NNNN\t\t\tVerbosely list the contents of PSB file.NNNN
 
@@ -641,7 +679,9 @@ Examples:
 	parser.add_option('-b', '--bin',	dest='bin',		help='set path to alldata.bin to FILE',		metavar='FILE',		default=None)
 	parser.add_option('-c', '--chunk',	dest='chunk',		help='write chunk files',			action='store_true',	default=False)
 	parser.add_option('-d', '--debug',	dest='debug',		help='write debug files',			action='store_true',	default=False)
+	parser.add_option('-j',	'--json',	dest='json',		help='write JSON to FILE',			metavar='FILE',		default=None)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
+	parser.add_option('-s', '--split',	dest='split',		help='split alldata.bin into files',		action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
 	(options, args) = parser.parse_args()
 
