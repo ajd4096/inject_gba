@@ -662,7 +662,7 @@ def	main():
 
 	class MyParser(optparse.OptionParser):
 		def format_epilog(self, formatter):
-			return self.epilog
+			return self.expand_prog_name(self.epilog)
 
 	parser = MyParser(usage='Usage: %prog [options] <psb filename>', epilog=
 """
@@ -686,6 +686,9 @@ Examples:
 	parser.add_option('-s', '--split',	dest='split',		help='split alldata.bin into files',		action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
 	(options, args) = parser.parse_args()
+
+	if not args:
+		parser.print_help()
 
 	for psb_filename in args:
 		extract_psb(psb_filename, options.bin)
