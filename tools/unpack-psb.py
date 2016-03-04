@@ -123,6 +123,7 @@ class	PSB():
 		self.chunk_data		= []
 		self.entries		= None
 		self.file_data		= []
+		self.file_number	= 0
 
 	def	__str__(self):
 		o = "PSB:\n"
@@ -225,19 +226,17 @@ class	PSB():
 				unpacker.seek(self.header.offset_chunk_data + o)
 				d = unpacker.data()[:l]
 				self.chunk_data.append(d)
-				if options.chunk:
-					open(name + '.chunk.%4.4d' % i, 'wb').write(d)
 
 		# Read in our tree of entries
-		self.entries = self.unpack_object(unpacker, "entries", self.header.offset_entries)
+		self.entries = self.unpack_object(unpacker, name, '', self.header.offset_entries)
 
 	def	print_json(self, file):
-		print(json.dump(self.entries, file, indent=1))
+		json.dump(self.entries, file, indent=1)
 
 	#
 	# based on exm2lib get_number()
 	#
-	def	unpack_object(self, unpacker, name, offset):
+	def	unpack_object(self, unpacker, basename, name, offset):
 		#print(">>> %s @0x%X" % (name, offset))
 		unpacker.seek(offset)
 		t = unpacker.peek('<B')[0]
@@ -298,10 +297,15 @@ class	PSB():
 			v = unpacker('<B')[0]
 			if options.verbose:
 				print(">>> %s @0x%X type %d value chunk %d" % (name, offset, t, v))
+
+			# Write out the chunk data into a file
+			if options.json:
+				filename = self.getFilename()
+				diskname = options.json + basename + filename
+				open(diskname, "wb").write(self.chunk_data[v])
+				return {'type':t, 'value':v, 'file':diskname}
 			# PSB contains just the index into the chunk array
-			#return {'type':t, 'value':v}
-			# But we will also return the chunk data
-			return {'type':t, 'value':v, 'data': binascii.b2a_base64(self.chunk_data[v]).decode('utf-8') }
+			return {'type':t, 'value':v}
 		elif t == 29:
 			# by inspection, length=0, purpose unknown, seems to be followed by a type 21
 			t = unpacker('<B')[0]
@@ -334,7 +338,7 @@ class	PSB():
 				o = offsets.values[i]
 				if options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
-				v1 = self.unpack_object(unpacker, name + "|%d" % i, offsets.offset1 + o)
+				v1 = self.unpack_object(unpacker, basename, name + "|%d" % i, offsets.offset1 + o)
 				v.append(v1)
 			return {'type':t, 'value':(v)}
 		elif t == 33:
@@ -354,8 +358,8 @@ class	PSB():
 				if options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
 				# Unpack the object at the offset
-				v1 = self.unpack_object(unpacker, name + "|%s" % ns, offsets.offset1 + o)
-				if name == 'entries|file_info':
+				v1 = self.unpack_object(unpacker, basename, name + "|%s" % ns, offsets.offset1 + o)
+				if name == '|file_info':
 					# If we're a file_info list
 					# v1['type'] == 32
 					# v1['value'] = list of type/value pairs
@@ -372,18 +376,19 @@ class	PSB():
 						unobfuscate_data(fd, ns)
 						# Decompress the data
 						fd = uncompress_data(fd)
+						# Write out the file.
+						filename = self.getFilename()
+						diskname = options.json + filename
+						open(diskname, "wb").write(fd)
+						v1['file'] = diskname
 						# Try to parse it as a PSB
 						psb = PSB()
-						psb.unpack(buffer_unpacker(fd), ns)
+						psb.unpack(buffer_unpacker(fd), filename)
+						# If we have a PSB, add it to the tree
 						if psb.header.signature == b'PSB\x00':
 							# FIXME - some sub-PSBs have strings but no entries
-							v2 = { 'type':100, 'entries':psb.entries }
-						else:
-							v2 = { 'type':100, 'data': binascii.b2a_base64(fd).decode('utf-8') }
-						# Append our file data entry instead of the list32
-						v.append((ns, v2))
-					else:
-						v.append((ns, v1))
+							v1['entries'] = psb.entries
+					v.append((ns, v1))
 				else:
 					v.append((ns, v1))
 			return {'type':t, 'value':(v)}
@@ -393,6 +398,12 @@ class	PSB():
 			print("Unknown type")
 			print(unpacker.peek('<16B'))
 
+	# Get the filename sequence
+	def	getFilename(self):
+		name = "_%4.4d" % self.file_number
+		self.file_number += 1
+		return name
+		
 	# Copied from exm2lib
 	def	get_name(self, index):
 		accum = ""
@@ -615,46 +626,11 @@ def	extract_psb(psb_filename, bin_filename):
 		bin_file_data = None
 
 	psb = PSB()
-	psb.unpack(buffer_unpacker(psb_file_data), psb_filename, bin_file_data)
+	psb.unpack(buffer_unpacker(psb_file_data), '', bin_file_data)
 
 	if options.json:
 		j = open(options.json, 'wt')
 		psb.print_json(j)
-
-	if options.split:
-		print("File count %d" % len(psb.file_data))
-		print("-")
-		for i in range(0, len(psb.file_data)):
-			fi	= psb.file_data[i]
-			fn	= "file.%4.4d" % i
-			print("File %d" % i)
-			print("Name: %s" % fi['name'])
-			if not options.quiet:
-				print("Offset: 0x%X" % fi['offset'])
-				print("Compressed Length: %d (0x%X)" % (fi['length'], fi['length']))
-
-			# Get the possibly-encrypted, possibly-compressed data
-			o = fi['offset']
-			l = fi['length']
-			# By inspection, this length does include the 'mdf\0' header
-			data = bytearray(bin_file_data[o : o + l])
-			if options.debug:
-				open(fn + ".0", 'wb').write(data)
-			if not options.quiet:
-				print("Length: %d" % len(data))
-
-			unobfuscate_data(data, fi['name'])
-			if options.debug:
-				open(fn + ".1", 'wb').write(data)
-
-			data = uncompress_data(data)
-			if options.debug:
-				open(fn + ".2", 'wb').write(data)
-
-			# Write out the final file
-			open(fn, 'wb').write(data)
-
-			print("-")
 
 def	main():
 	# Make our CLI options global so we don't have to pass them around.
@@ -667,23 +643,15 @@ def	main():
 	parser = MyParser(usage='Usage: %prog [options] <psb filename>', epilog=
 """
 Examples:
-%prog -v alldata.psb.m\t\t\tVerbosely list the contents of alldata.psb.m
 
-%prog -s -b alldata.bin alldata.psb.m\tSplit alldata.bin into file.0000 etc
-
-%prog -j output.json -b alldata.bin alldata.psb.m\tConvert to JSON (huge)
-
-%prog -v file.NNNN\t\t\tVerbosely list the contents of PSB file.NNNN
-
-%prog -c file.NNNN\t\t\tExtract chunk data from PSB file.NNNN
+%prog -j output.json -b alldata.bin alldata.psb.m
+This will convert the PSB tree into JSON, and write out all sub-files into ouput.json_0000 etc
 
 """)
 	parser.add_option('-b', '--bin',	dest='bin',		help='set path to alldata.bin to FILE',		metavar='FILE',		default=None)
-	parser.add_option('-c', '--chunk',	dest='chunk',		help='write chunk files',			action='store_true',	default=False)
 	parser.add_option('-d', '--debug',	dest='debug',		help='write debug files',			action='store_true',	default=False)
 	parser.add_option('-j',	'--json',	dest='json',		help='write JSON to FILE',			metavar='FILE',		default=None)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
-	parser.add_option('-s', '--split',	dest='split',		help='split alldata.bin into files',		action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
 	(options, args) = parser.parse_args()
 
