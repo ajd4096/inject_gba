@@ -121,7 +121,6 @@ class	PSB():
 		self.chunk_lengths	= PSB_ARRAY()
 		self.chunk_data		= []
 		self.entries		= None
-		self.file_data		= []
 		self.file_number	= 0
 
 	def	__str__(self):
@@ -139,9 +138,6 @@ class	PSB():
 		#for i in range(0, self.entries.names.count):
 		#	s = self.entries.names.values[i]
 		#	o += "%d %d %s\n" % (i, s, self.name[s])
-		for i in range(0, len(self.file_data)):
-			fi = self.file_data[i]
-			o += "%d 0x%X %d %s\n" % (i, fi['offset'], fi['length'], fi['name'])
 		return o
 
 	def	unpack(self, psb_data, bin_data = None):
