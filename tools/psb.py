@@ -120,9 +120,7 @@ class	PSB():
 		self.header		= PSB_HDR()
 		self.names		= []
 		self.strings		= [] 
-		self.chunk_offsets	= PSB_ARRAY()
-		self.chunk_lengths	= PSB_ARRAY()
-		self.chunk_data		= []
+		self.chunks		= []
 		self.entries		= None
 		self.file_number	= 0
 		# Variables used for repacking
@@ -183,31 +181,8 @@ class	PSB():
 		unpacker.seek(self.header.offset_strings)
 		self.strings = self.unpack_strings(unpacker)
 
-		# This may be empty
-		unpacker.seek(self.header.offset_chunk_offsets)
-		self.chunk_offsets.unpack(unpacker)
-		if global_vars.options.verbose:
-			print("Chunk offsets count %d" % self.chunk_offsets.count)
-			for i in range(0, self.chunk_offsets.count):
-				print("Chunk offset %d = %d 0x%X" % (i, self.chunk_offsets.values[i], self.chunk_offsets.values[i]))
-
-
-		# This may be empty
-		unpacker.seek(self.header.offset_chunk_lengths)
-		self.chunk_lengths.unpack(unpacker)
-		if global_vars.options.verbose:
-			print("Chunk lengths count %d" % self.chunk_lengths.count)
-			for i in range(0, self.chunk_lengths.count):
-				print("Chunk length %d = %d 0x%X" % (i, self.chunk_lengths.values[i], self.chunk_lengths.values[i]))
-
-		# If we have chunk data, split it out
-		if self.chunk_offsets.count > 0 and self.header.offset_chunk_data < len(unpacker.data()):
-			for i in range(0, self.chunk_offsets.count):
-				o = self.chunk_offsets.values[i]
-				l = self.chunk_lengths.values[i]
-				unpacker.seek(self.header.offset_chunk_data + o)
-				d = unpacker.data()[:l]
-				self.chunk_data.append(d)
+		# Read in the array of chunks
+		self.chunks = self.unpack_chunks(unpacker)
 
 		# Read in our tree of entries
 		self.entries = self.unpack_object(unpacker, '', self.header.offset_entries)
@@ -385,7 +360,7 @@ class	PSB():
 			diskname = self.getFilename()
 			# Write out the chunk data into a file
 			if global_vars.options.files:
-				open(diskname, "wb").write(self.chunk_data[v])
+				open(diskname, "wb").write(self.chunks[v])
 			return {'type':t, 'value':v, 'file':os.path.basename(diskname)}
 		elif t == 29:
 			# by inspection, length=0, purpose unknown, seems to be followed by a type 21
@@ -489,6 +464,38 @@ class	PSB():
 		self.file_number += 1
 		return name
 		
+	def	unpack_chunks(self, unpacker):
+		chunks		= []
+		chunk_offsets	= PSB_ARRAY()
+		chunk_lengths	= PSB_ARRAY()
+
+		# Read in our chunk offsets array (this may be empty)
+		unpacker.seek(self.header.offset_chunk_offsets)
+		chunk_offsets.unpack(unpacker)
+		if global_vars.options.verbose:
+			print("Chunk offsets count %d" % chunk_offsets.count)
+			for i in range(0, chunk_offsets.count):
+				print("Chunk offset %d = %d 0x%X" % (i, chunk_offsets.values[i], chunk_offsets.values[i]))
+
+
+		# Read in our chunk lengths array (this may be empty)
+		unpacker.seek(self.header.offset_chunk_lengths)
+		chunk_lengths.unpack(unpacker)
+		if global_vars.options.verbose:
+			print("Chunk lengths count %d" % chunk_lengths.count)
+			for i in range(0, chunk_lengths.count):
+				print("Chunk length %d = %d 0x%X" % (i, chunk_lengths.values[i], chunk_lengths.values[i]))
+
+		# If we have chunk data, split it out
+		if chunk_offsets.count > 0 and self.header.offset_chunk_data < len(unpacker.data()):
+			for i in range(0, chunk_offsets.count):
+				o = chunk_offsets.values[i]
+				l = chunk_lengths.values[i]
+				unpacker.seek(self.header.offset_chunk_data + o)
+				d = unpacker.data()[:l]
+				chunks.append(d)
+		return chunks
+
 	def	unpack_names(self, unpacker):
 		str1		= PSB_ARRAY()
 		str2		= PSB_ARRAY()
