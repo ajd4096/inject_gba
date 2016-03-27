@@ -552,7 +552,7 @@ class	PSB():
 			for j in range(0, len(d)):
 				if d[j] == 0:
 					s = d[:j].decode('utf-8')
-					self.strings.append(s)
+					strings.append(s)
 					if global_vars.options.verbose:
 						print("String %d  @0x%X %s" % (i, o, s))
 					break
