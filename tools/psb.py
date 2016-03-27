@@ -119,7 +119,6 @@ class	PSB():
 		self.bin_data		= None
 		self.header		= PSB_HDR()
 		self.names		= []
-		self.strings_array	= PSB_ARRAY()
 		self.strings		= [] 
 		self.chunk_offsets	= PSB_ARRAY()
 		self.chunk_lengths	= PSB_ARRAY()
@@ -182,22 +181,7 @@ class	PSB():
 
 		# Read in the array of strings
 		unpacker.seek(self.header.offset_strings)
-		self.strings_array.unpack(unpacker)
-		if global_vars.options.verbose:
-			print("Parsing strings array (%d)" % self.strings_array.count)
-		# Read in each string
-		for i in range(0, self.strings_array.count):
-			o = self.strings_array.values[i]
-			# Create a python string from the NUL-terminated C-string at offset
-			unpacker.seek(self.header.offset_strings_data + o)
-			d = unpacker.data();
-			for j in range(0, len(d)):
-				if d[j] == 0:
-					s = d[:j].decode('utf-8')
-					self.strings.append(s)
-					if global_vars.options.verbose:
-						print("String %d  @0x%X %s" % (i, o, s))
-					break
+		self.strings = self.unpack_strings(unpacker)
 
 		# This may be empty
 		unpacker.seek(self.header.offset_chunk_offsets)
@@ -544,6 +528,28 @@ class	PSB():
 			b = c
 			accum = chr(e) + accum
 		return accum
+
+	def	unpack_strings(self, unpacker):
+		strings	= []
+		strings_array	= PSB_ARRAY()
+		strings_array.unpack(unpacker)
+
+		if global_vars.options.verbose:
+			print("Parsing strings array (%d)" % strings_array.count)
+		# Read in each string
+		for i in range(0, strings_array.count):
+			o = strings_array.values[i]
+			# Create a python string from the NUL-terminated C-string at offset
+			unpacker.seek(self.header.offset_strings_data + o)
+			d = unpacker.data();
+			for j in range(0, len(d)):
+				if d[j] == 0:
+					s = d[:j].decode('utf-8')
+					self.strings.append(s)
+					if global_vars.options.verbose:
+						print("String %d  @0x%X %s" % (i, o, s))
+					break
+		return strings
 
 class	PSB_HDR():
 	def	__init__(self):
