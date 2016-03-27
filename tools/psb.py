@@ -271,16 +271,16 @@ class	PSB():
 			v = obj['value']
 			packer('f', v)
 		elif t == 32:
+			# array of objects, written as array of offsets, array of objects
 			packer('<B', t)
-			# from exm2lib, array of offsets of objects, followed by the objects
 			# Get our list of objects
-			list_of_objects = obj['value']
-			print(list_of_objects)
+			v = obj['value']
 			# FIXME - if this is a file, use the real file size and track the offset within alldata.bin
 			# Build a list of offsets
 			list_of_offsets = PSB_ARRAY()
+			list_of_objects	= []
 			next_offset = 0
-			for o in list_of_objects:
+			for o in v:
 				# Pack our object into a temporary buffer to get the size
 				tmp_packer = buffer_packer()
 				self.pack_object(tmp_packer, o)
@@ -288,19 +288,22 @@ class	PSB():
 				list_of_offsets.values.append(next_offset)
 				# Remember our size for the next offset
 				next_offset = tmp_packer.length()
+				# Remember our object data
+				list_of_objects.append(bytes(tmp_packer._buffer))
 			# Pack the list of offsets
 			list_of_offsets.pack(packer)
-			# Pack the objects
-			for o in list_of_objects:
-				# Pack our object into the real packer
-				self.pack_object(packer, o)
+			# Pack the object data
+			for oi in range(0, len(list_of_objects)):
+				packer('<s', list_of_objects[oi])
 		elif t == 33:
+			# array of name/object pairs, written as array of name indexes, array of offsets, array of objects
 			packer('<B', t)
-			# array of name/object pairs, written as array of name indexes, array of offsets
+			# Get our list of objects
 			v = obj['value']
 			next_offset = 0
 			list_of_names   = PSB_ARRAY()
 			list_of_offsets = PSB_ARRAY()
+			list_of_objects	= []
 			for o in v:
 				obj_name= o[0]
 				obj_data = o[1]
@@ -310,24 +313,23 @@ class	PSB():
 				self.new_names.append(obj_name)
 				obj_name_index = len(self.new_names) -1
 				# Pack our object into a temporary buffer to get the size
-				obj_packer = buffer_packer()
-				self.pack_object(obj_packer, obj_data)
+				tmp_packer = buffer_packer()
+				self.pack_object(tmp_packer, obj_data)
 				# Remember our name index
 				list_of_names.values.append(obj_name_index)
 				# Remember our offset
 				list_of_offsets.values.append(next_offset)
 				# Remember our size for the next offset
-				next_offset = obj_packer.length()
+				next_offset = tmp_packer.length()
+				# Remember our object data
+				list_of_objects.append(bytes(tmp_packer._buffer))
 			# Pack the list of names
 			list_of_names.pack(packer)
 			# Pack the list of offsets
 			list_of_offsets.pack(packer)
-			# Pack the data
-			for o in v:
-				obj_name= o[0]
-				obj_data = o[1]
-				# Pack our object into the real packer
-				self.pack_object(packer, obj_data)
+			# Pack the object data
+			for oi in range(0, len(list_of_objects)):
+				packer('<s', list_of_objects[oi])
 		else:
 			print("Unknown type")
 			print(t)
