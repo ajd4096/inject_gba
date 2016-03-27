@@ -202,7 +202,7 @@ def	injectFile(adbFilename, injectName):
 	new_rom = bytearray(open(injectName, 'rb').read())
 	# Check it will fit
 	if (len(new_rom) > giromlen):
-		print("Uncompressed file %s (%d bytes) too large for injection (max %d bytes)" % (injectName, len(new_rom), giromlen))
+		print("Uncompressed file '%s' (%d bytes) too large for injection (max %d bytes)" % (injectName, len(new_rom), giromlen))
 		return
 
 	# Pad the new ROM with FFs
@@ -214,7 +214,7 @@ def	injectFile(adbFilename, injectName):
 
 	# Check it will fit
 	if (len(new_compressed) > gimdflen -8):
-		print("Compressed file %s (%d bytes) too large for injection (max %d bytes)" % (injectName, len(new_compressed)+8, gimdflen))
+		print("Compressed file '%s' (%d bytes) too large for injection (max %d bytes)" % (injectName, len(new_compressed)+8, gimdflen))
 		return
 
 	# Copy in the merged rom, XORed with our key
