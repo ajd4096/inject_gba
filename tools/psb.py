@@ -150,9 +150,16 @@ class	PSB():
 
 		# Walk the 'entries' tree
 		# This builds our new_names, new_strings, new_chunks lists
+		# new_names is built in tree order, but the original seems to be sorted
 		entries_packer = buffer_packer()
 		self.pack_object(entries_packer, self.entries)
 		entries_data = entries_packer._buffer
+
+		if global_vars.options.verbose:
+			for i in range(0, len(self.new_names)):
+				print("Name %d %s" % (i, self.new_names[i]))
+			for i in range(0, len(self.new_strings)):
+				print("String %d %s\n" % (i, self.new_strings[i]))
 
 		psb_data = bytearray(packer._buffer)
 		bin_data = bytearray([])
@@ -212,24 +219,15 @@ class	PSB():
 		elif t >= 21 and t <= 22:
 			# index into 'strings' array (21 = 1 byte, 22 = 2 bytes)
 			v = obj['value']
-			for si in range(0, len(self.new_strings)):
-				if self.new_strings[si] == v:
-					if si < 1 << 8:
-						packer('<B', 21)
-						packer('<B', si)
-					else:
-						packer('<B', 22)
-						packer('<H', si)
-					break
-			else:
+			if not v in self.new_strings:
 				self.new_strings.append(v)
-				si = len(self.new_strings) -1
-				if si < 1 << 8:
-					packer('<B', 21)
-					packer('<B', si)
-				else:
-					packer('<B', 21)
-					packer('<H', si)
+			si = self.new_strings.index(v)
+			if si < 1 << 8:
+				packer('<B', 21)
+				packer('<B', si)
+			else:
+				packer('<B', 21)
+				packer('<H', si)
 		elif t == 25:
 			# Chunk data
 			# by inspection, length=1, index into chunk data
@@ -284,8 +282,9 @@ class	PSB():
 				if global_vars.options.test:
 					print(">>> %s %s" % ('name', obj_name))
 				# Add the name to our (psb-global) list of names
-				self.new_names.append(obj_name)
-				obj_name_index = len(self.new_names) -1
+				if not obj_name in self.new_names:
+					self.new_names.append(obj_name)
+				obj_name_index = self.new_names.index(obj_name)
 				# Pack our object into a temporary buffer to get the size
 				tmp_packer = buffer_packer()
 				self.pack_object(tmp_packer, obj_data)
