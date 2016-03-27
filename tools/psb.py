@@ -126,6 +126,7 @@ class	PSB():
 		# Variables used for repacking
 		self.new_names		= []
 		self.new_strings	= []
+		self.new_chunks		= []
 
 	def	__str__(self):
 		o = "PSB:\n"
@@ -146,8 +147,13 @@ class	PSB():
 
 	def	pack(self):
 		packer = buffer_packer()
+
 		# Walk the 'entries' tree
-		self.pack_object(packer, self.entries)
+		# This builds our new_names, new_strings, new_chunks lists
+		entries_packer = buffer_packer()
+		self.pack_object(entries_packer, self.entries)
+		entries_data = entries_packer._buffer
+
 		psb_data = bytearray(packer._buffer)
 		bin_data = bytearray([])
 
@@ -224,6 +230,15 @@ class	PSB():
 				else:
 					packer('<B', 21)
 					packer('<H', si)
+		elif t == 25:
+			# Chunk data
+			# by inspection, length=1, index into chunk data
+			packer('<B', t)
+			fn = obj['file']
+			fd = open(fn, 'rb').read()
+			self.new_chunks.append(fd)
+			ci = len(self.new_chunks) - 1
+			packer('<B', ci)
 		elif t == 30:
 			# 4 byte float
 			packer('<B', t)
