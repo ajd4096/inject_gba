@@ -110,7 +110,8 @@ struct PSBHDR {
 '''
 
 class	PSB():
-	def	__init__(self):
+	def	__init__(self, basename):
+		self.basename		= basename
 		self.bin_data		= None
 		self.header		= PSB_HDR()
 		self.names		= []
@@ -143,7 +144,9 @@ class	PSB():
 			o += "%d 0x%X %d %s\n" % (i, fi['offset'], fi['length'], fi['name'])
 		return o
 
-	def	unpack(self, unpacker, name, bin_data = None):
+	def	unpack(self, psb_data, bin_data = None):
+		unpacker = buffer_unpacker(psb_data)
+
 		if global_vars.options.verbose:
 			print("Parsing header:")
 			l = len(unpacker.data())
@@ -211,7 +214,7 @@ class	PSB():
 				self.chunk_data.append(d)
 
 		# Read in our tree of entries
-		self.entries = self.unpack_object(unpacker, name, '', self.header.offset_entries)
+		self.entries = self.unpack_object(unpacker, '', self.header.offset_entries)
 
 	def	print_json(self, file):
 		json.dump(self.entries, file, indent=1)
@@ -219,7 +222,7 @@ class	PSB():
 	#
 	# based on exm2lib get_number()
 	#
-	def	unpack_object(self, unpacker, basename, name, offset):
+	def	unpack_object(self, unpacker, name, offset):
 		#print(">>> %s @0x%X" % (name, offset))
 		unpacker.seek(offset)
 		t = unpacker.peek('<B')[0]
@@ -281,14 +284,12 @@ class	PSB():
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X type %d value chunk %d" % (name, offset, t, v))
 
+			# Build the name of our sub-file for the chunk
+			diskname = self.getFilename()
 			# Write out the chunk data into a file
-			if global_vars.options.json:
-				filename = self.getFilename()
-				diskname = global_vars.options.json + basename + filename
+			if global_vars.options.files:
 				open(diskname, "wb").write(self.chunk_data[v])
-				return {'type':t, 'value':v, 'file':diskname}
-			# PSB contains just the index into the chunk array
-			return {'type':t, 'value':v}
+			return {'type':t, 'value':v, 'file':os.path.basename(diskname)}
 		elif t == 29:
 			# by inspection, length=0, purpose unknown, seems to be followed by a type 21
 			t = unpacker('<B')[0]
@@ -321,7 +322,7 @@ class	PSB():
 				o = offsets.values[i]
 				if global_vars.options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
-				v1 = self.unpack_object(unpacker, basename, name + "|%d" % i, offsets.offset1 + o)
+				v1 = self.unpack_object(unpacker, name + "|%d" % i, offsets.offset1 + o)
 				v.append(v1)
 			return {'type':t, 'value':(v)}
 		elif t == 33:
@@ -341,7 +342,7 @@ class	PSB():
 				if global_vars.options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
 				# Unpack the object at the offset
-				v1 = self.unpack_object(unpacker, basename, name + "|%s" % ns, offsets.offset1 + o)
+				v1 = self.unpack_object(unpacker, name + "|%s" % ns, offsets.offset1 + o)
 				if name == '|file_info':
 					# If we're a file_info list
 					# v1['type'] == 32
@@ -350,27 +351,28 @@ class	PSB():
 					# list index 1 = length
 					fo = v1['value'][0]['value']
 					fl = v1['value'][1]['value']
-					self.file_data.append({ 'name': ns, 'offset': fo, 'length': fl})
-					# If we have the alldata.bin file and we're converting...
-					if self.bin_data and global_vars.options.json:
+					# If we have the alldata.bin file, extract the data
+					if self.bin_data:
 						# Extract the data chunk
 						fd = self.bin_data[fo : fo + fl]
 						# Unobfuscate the data using the filename for the seed
 						unobfuscate_data(fd, ns)
 						# Decompress the data
 						fd = uncompress_data(fd)
+						# Build the name of our sub-file
+						diskname = self.getFilename()
+						v1['file'] = os.path.basename(diskname)
 						# Write out the file.
-						filename = self.getFilename()
-						diskname = global_vars.options.json + filename
-						open(diskname, "wb").write(fd)
-						v1['file'] = diskname
+						if global_vars.options.files:
+							open(diskname, "wb").write(fd)
 						# Try to parse it as a PSB
-						psb = PSB()
-						psb.unpack(buffer_unpacker(fd), filename)
-						# If we have a PSB, add it to the tree
-						if psb.header.signature == b'PSB\x00':
-							# FIXME - some sub-PSBs have strings but no entries
-							v1['entries'] = psb.entries
+						if global_vars.options.parse:
+							psb = PSB(diskname)
+							psb.unpack(fd)
+							# If we have a PSB, add it to the tree
+							if psb.header.signature == b'PSB\x00':
+								# FIXME - some sub-PSBs have strings but no entries
+								v1['entries'] = psb.entries
 					v.append((ns, v1))
 				else:
 					v.append((ns, v1))
@@ -381,9 +383,9 @@ class	PSB():
 			print("Unknown type")
 			print(unpacker.peek('<16B'))
 
-	# Get the filename sequence
+	# Get the next sub-file name
 	def	getFilename(self):
-		name = "_%4.4d" % self.file_number
+		name = "%s_%4.4d" % (self.basename, self.file_number)
 		self.file_number += 1
 		return name
 		
@@ -520,7 +522,6 @@ class	PSB_ARRAY():
 			print("Unknown value length %d" % self.value_length)
 			assert(False)
 		self.offset1 = unpacker.tell()
-
 
 #
 # Get the XOR key for the given filename
