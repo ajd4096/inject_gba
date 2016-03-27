@@ -112,9 +112,6 @@ class	PSB():
 	def	__init__(self):
 		self.bin_data		= None
 		self.header		= PSB_HDR()
-		self.str1		= PSB_ARRAY()
-		self.str2		= PSB_ARRAY()
-		self.str3		= PSB_ARRAY()
 		self.names		= []
 		self.strings_array	= PSB_ARRAY()
 		self.strings		= [] 
@@ -128,9 +125,6 @@ class	PSB():
 	def	__str__(self):
 		o = "PSB:\n"
 		o += str(self.header)
-		#o += str(self.str1)
-		#o += str(self.str2)
-		#o += str(self.str3)
 		for i in range(0, len(self.names)):
 			o += "Name %d %s\n" % (i, self.names[i])
 		#o += "Strings %s\n" % str(self.strings)
@@ -168,19 +162,7 @@ class	PSB():
 		# Read in the arrays of names
 		# These are a complex structure used to remove duplicate prefixes of the file names
 		unpacker.seek(self.header.offset_names)
-		self.str1.unpack(unpacker)
-		#print("str1 %d" % self.str1.count)
-		self.str2.unpack(unpacker)
-		#print("str2 %d" % self.str1.count)
-		self.str3.unpack(unpacker)
-		#print("str3 %d" % self.str1.count)
-		if options.verbose:
-			print("Parsing names arrays (%d)" % self.str3.count)
-		for i in range(0, self.str3.count):
-			s = self.get_name(i)
-			self.names.append(s)
-			if options.verbose:
-				print("Name %d %s" % (i, s))
+		self.names = self.unpack_names(unpacker)
 
 		# Read in the array of strings
 		unpacker.seek(self.header.offset_strings)
@@ -404,20 +386,40 @@ class	PSB():
 		self.file_number += 1
 		return name
 		
+	def	unpack_names(self, unpacker):
+		str1		= PSB_ARRAY()
+		str2		= PSB_ARRAY()
+		str3		= PSB_ARRAY()
+		str1.unpack(unpacker)
+		str2.unpack(unpacker)
+		str3.unpack(unpacker)
+
+		if options.verbose:
+			print("Parsing names arrays (%d)" % str3.count)
+
+		names		= []
+		for i in range(0, str3.count):
+			s = self.get_name(str1, str2, str3, i)
+			names.append(s)
+			if options.verbose:
+				print("Name %d %s" % (i, s))
+
+		return names
+
 	# Copied from exm2lib
-	def	get_name(self, index):
+	def	get_name(self, str1, str2, str3, index):
 		accum = ""
 
-		a = self.str3.values[index];
-		b = self.str2.values[a];
+		a = str3.values[index];
+		b = str2.values[a];
 		c = 0
 		d = 0
 		e = 0
 		#print("%d %d %d %d %d %c" % (a, b, c, d, e, chr(e)))
 
 		while b != 0:
-			c = self.str2.values[b]
-			d = self.str1.values[c]
+			c = str2.values[b]
+			d = str1.values[c]
 			e = b - d
 			#print("%d %d %d %d %d %c" % (a, b, c, d, e, chr(e)))
 			b = c
