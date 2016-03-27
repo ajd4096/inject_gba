@@ -153,6 +153,11 @@ class	PSB():
 		# new_names is built in tree order, but the original seems to be sorted
 		entries_packer = buffer_packer()
 		self.pack_object(entries_packer, self.entries)
+
+		# Sort the new_names list, then repack the tree to get the correct indexes for the names array
+		self.new_names.sort()
+		entries_packer = buffer_packer()
+		self.pack_object(entries_packer, self.entries)
 		entries_data = entries_packer._buffer
 
 		if global_vars.options.verbose:
