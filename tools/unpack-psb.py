@@ -58,6 +58,11 @@ def	extract_psb(psb_filename):
 		j = open(json_filename, 'wt')
 		mypsb.print_json(j)
 
+	if global_vars.options.test:
+		psb_data, bin_data = mypsb.pack()
+		open(psb_filename + '.out', 'wb').write(psb_data)
+		open(bin_filename + '.out', 'wb').write(bin_data)
+
 def	main():
 
 	class MyParser(optparse.OptionParser):
@@ -79,6 +84,7 @@ This will read alldata.psb.m and alldata.bin, and write out alldata.json with al
 	parser.add_option('-j',	'--json',	dest='json',		help='write JSON to alldata.json',		action='store_true',	default=False)
 	parser.add_option('-p',	'--parse',	dest='parse',		help='parse sub PSB files',			action='store_true',	default=False)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
+	parser.add_option('-t',	'--test',	dest='test',		help='test repacking PSB',			action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
 	(global_vars.options, args) = parser.parse_args()
 

@@ -20,8 +20,12 @@ class	buffer_packer():
 	def __call__(self, fmt, data):
 		self._buffer += struct.pack(fmt, data)
 
+	def	length(self):
+		return len(self._buffer)
+
 	def	tell(self):
 		return len(self._buffer)
+
 
 '''
 <	Little endian
@@ -122,6 +126,9 @@ class	PSB():
 		self.chunk_data		= []
 		self.entries		= None
 		self.file_number	= 0
+		# Variables used for repacking
+		self.new_names		= []
+		self.new_strings	= []
 
 	def	__str__(self):
 		o = "PSB:\n"
@@ -139,6 +146,15 @@ class	PSB():
 		#	s = self.entries.names.values[i]
 		#	o += "%d %d %s\n" % (i, s, self.name[s])
 		return o
+
+	def	pack(self):
+		packer = buffer_packer()
+		# Walk the 'entries' tree
+		self.pack_object(packer, self.entries)
+		psb_data = bytearray(packer._buffer)
+		bin_data = bytearray([])
+
+		return psb_data, bin_data
 
 	def	unpack(self, psb_data, bin_data = None):
 		unpacker = buffer_unpacker(psb_data)
@@ -218,6 +234,105 @@ class	PSB():
 	#
 	# based on exm2lib get_number()
 	#
+	def	pack_object(self, packer, obj):
+		t = obj['type']
+		if t >= 1 and t <= 3:
+			packer('<B', t)
+		elif t == 4:
+			packer('<B', t)
+		elif t >=5 and t <= 8:
+			packer('<B', t)
+			v = obj['value']
+			packer('<%ds' % (t - 4), v.to_bytes(t - 4, 'little'))
+		elif t >= 21 and t <= 22:
+			# index into 'strings' array (21 = 1 byte, 22 = 2 bytes)
+			v = obj['value']
+			for si in range(0, len(self.new_strings)):
+				if self.new_strings[si] == v:
+					if si < 1 << 8:
+						packer('<B', 21)
+						packer('<B', si)
+					else:
+						packer('<B', 22)
+						packer('<H', si)
+					break
+			else:
+				self.new_strings.append(v)
+				si = len(self.new_strings) -1
+				if si < 1 << 8:
+					packer('<B', 21)
+					packer('<B', si)
+				else:
+					packer('<B', 21)
+					packer('<H', si)
+		elif t == 30:
+			# 4 byte float
+			packer('<B', t)
+			v = obj['value']
+			packer('f', v)
+		elif t == 32:
+			packer('<B', t)
+			# from exm2lib, array of offsets of objects, followed by the objects
+			# Get our list of objects
+			list_of_objects = obj['value']
+			print(list_of_objects)
+			# FIXME - if this is a file, use the real file size and track the offset within alldata.bin
+			# Build a list of offsets
+			list_of_offsets = PSB_ARRAY()
+			next_offset = 0
+			for o in list_of_objects:
+				# Pack our object into a temporary buffer to get the size
+				tmp_packer = buffer_packer()
+				self.pack_object(tmp_packer, o)
+				# Remember our offset
+				list_of_offsets.values.append(next_offset)
+				# Remember our size for the next offset
+				next_offset = tmp_packer.length()
+			# Pack the list of offsets
+			list_of_offsets.pack(packer)
+			# Pack the objects
+			for o in list_of_objects:
+				# Pack our object into the real packer
+				self.pack_object(packer, o)
+		elif t == 33:
+			packer('<B', t)
+			# array of name/object pairs, written as array of name indexes, array of offsets
+			v = obj['value']
+			next_offset = 0
+			list_of_names   = PSB_ARRAY()
+			list_of_offsets = PSB_ARRAY()
+			for o in v:
+				obj_name= o[0]
+				obj_data = o[1]
+				if global_vars.options.test:
+					print(">>> %s %s" % ('name', obj_name))
+				# Add the name to our (psb-global) list of names
+				self.new_names.append(obj_name)
+				obj_name_index = len(self.new_names) -1
+				# Pack our object into a temporary buffer to get the size
+				obj_packer = buffer_packer()
+				self.pack_object(obj_packer, obj_data)
+				# Remember our name index
+				list_of_names.values.append(obj_name_index)
+				# Remember our offset
+				list_of_offsets.values.append(next_offset)
+				# Remember our size for the next offset
+				next_offset = obj_packer.length()
+			# Pack the list of names
+			list_of_names.pack(packer)
+			# Pack the list of offsets
+			list_of_offsets.pack(packer)
+			# Pack the data
+			for o in v:
+				obj_name= o[0]
+				obj_data = o[1]
+				# Pack our object into the real packer
+				self.pack_object(packer, obj_data)
+		else:
+			print("Unknown type")
+			print(t)
+			assert(False)
+
 	def	unpack_object(self, unpacker, name, offset):
 		#print(">>> %s @0x%X" % (name, offset))
 		unpacker.seek(offset)
@@ -229,7 +344,7 @@ class	PSB():
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
 			return {'type':t}
-		if t == 4:
+		elif t == 4:
 			# from exm2lib & inspection, length = 0
 			# Used as a number, eg offset of file_info chunk
 			t = unpacker('<B')[0]
@@ -307,7 +422,7 @@ class	PSB():
 				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
 			return {'type':t, 'value':v}
 		elif t == 32:
-			# from exm2lib, array of offsets
+			# from exm2lib, array of offsets of objects, followed by the objects
 			t = unpacker('<B')[0]
 			offsets = PSB_ARRAY()
 			offsets.unpack(unpacker)
@@ -322,6 +437,8 @@ class	PSB():
 				v.append(v1)
 			return {'type':t, 'value':(v)}
 		elif t == 33:
+			if global_vars.options.verbose:
+				print(unpacker.peek('<16B'))
 			# from exm2lib, array of names, array of offsets
 			t = unpacker('<B')[0]
 			names = PSB_ARRAY()
@@ -337,12 +454,13 @@ class	PSB():
 				o = offsets.values[i]
 				if global_vars.options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
+					print(unpacker.peek('<16B'))
 				# Unpack the object at the offset
 				v1 = self.unpack_object(unpacker, name + "|%s" % ns, offsets.offset1 + o)
 				if name == '|file_info':
 					# If we're a file_info list
 					# v1['type'] == 32
-					# v1['value'] = list of type/value pairs
+					# v1['value'] = 2-element list of type/value pairs
 					# list index 0 = offset
 					# list index 1 = length
 					fo = v1['value'][0]['value']
@@ -482,6 +600,38 @@ class	PSB_ARRAY():
 		o += "Value Length %d\n" % self.value_length
 		o += "Values %s\n" % str(self.values[:5])
 		return o
+
+	def	pack(self, packer):
+		self.count = len(self.values)
+		# Pack the number of bytes in our length, and the length
+		if self.count < 1 << 8:
+			packer('<B', 1 + 12)
+			packer('<B', self.count)
+		else:
+			packer('<B', 2 + 12)
+			packer('<H', self.count)
+		# Find our biggest value
+		if self.count:
+			max_value = max(self.values)
+		else:
+			max_value = 0
+		# Pack the number of bytes in each value
+		if max_value <= 1 << 8:
+			packer('<B', 1 + 12)
+			for v in self.values:
+				packer('<B', v)
+		elif max_value < 1 << 16:
+			packer('<B', 2 + 12)
+			for v in self.values:
+				packer('<H', v)
+		elif max_value < 1 << 24:
+			packer('<B', 3 + 12)
+			for v in self.values:
+				packer('<3s', v.to_bytes(3, byteorder='little'))
+		elif max_value < 1 << 32:
+			packer('<B', 4 + 12)
+			for v in self.values:
+				packer('<I', v)
 
 	def	unpack(self, unpacker):
 		self.offset0 = unpacker.tell()
