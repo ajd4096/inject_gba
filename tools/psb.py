@@ -15,12 +15,35 @@ import	zlib
 import	global_vars
 
 #
-# Use namedtuples as light-weight OO
+# Define our object classes
 #
-TypeValue		= collections.namedtuple('TypeValue', 't v')
-NamedTypeValue		= collections.namedtuple('NamedTypeValue', 'n t v')
-FileOffsetLength	= collections.namedtuple('FileOffsetLength', 'f o l')
+# Note: we can't use __slots__ to save memory because that breaks __dict__ which we need for JSON
+class	TypeValue():
+	def	__init__(self, t, v):
+		self.t = t
+		self.v = v
 
+class	NameObject():
+	def	__init__(self, n, o):
+		self.n = n
+		self.o = o
+
+class	FileLengthOffset():
+	def	__init__(self, f, l, o,):
+		self.f = f
+		self.l = l
+		self.o = o
+
+#
+# Helper function to serialize our classes to python
+#
+def	jdefault(o):
+	return o.__dict__
+
+
+#
+# get the size of an int in bytes
+#
 def	getIntSize(v):
 	for s in range(1, 8):
 		if v < (1 << (8 * s)):
@@ -227,7 +250,7 @@ class	PSB():
 		self.unpack_entries(unpacker)
 
 	def	print_json(self, file):
-		json.dump(self.entries, file, indent=1)
+		json.dump(self.entries, file, default=jdefault, indent=1, sort_keys=True)
 
 	#
 	# based on exm2lib get_number()
@@ -330,8 +353,8 @@ class	PSB():
 			list_of_offsets = []
 			list_of_objects	= []
 			for o in v:
-				obj_name = o[0]
-				obj_data = o[1]
+				obj_name = o.n
+				obj_data = o.o
 				if global_vars.options.test:
 					print("<<< %s %s" % ('name', obj_name))
 				# Add the name to our (psb-global) list of names
@@ -340,7 +363,7 @@ class	PSB():
 				obj_name_index = self.new_names.index(obj_name)
 				# If the type33 is a file_info, each member is a file
 				if name == '|file_info':
-					assert(type(obj_data) == FileOffsetLength)
+					assert(type(obj_data) == FileLengthOffset)
 					print('<<<', obj_data)
 					# If we have a file, read it in and fix the offset/length before packing the object
 					if self.new_files:
@@ -558,9 +581,9 @@ class	PSB():
 						print(">>> disk '%s'" % os.path.basename(diskname))
 						print(">>> len %d" % len(fd))
 						open(diskname, "wb").write(fd)
-					v.append((ns, FileOffsetLength(os.path.basename(diskname), fo, fl)))
+					v.append(NameObject(ns, FileLengthOffset(os.path.basename(diskname), fl, fo)))
 				else:
-					v.append((ns, v1))
+					v.append(NameObject(ns, v1))
 			return TypeValue(t, v)
 
 		else:
