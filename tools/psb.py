@@ -541,7 +541,7 @@ class	PSB():
 				# If we have the alldata.bin file, extract the data
 				if name == '|file_info' and self.bin_data:
 					# Build the name of our sub-file
-					diskname = self.getFilename()
+					diskname = self.getFilename() + "_" + os.path.basename(ns)
 					# Get the offset and length
 					# v1.t == 32
 					# v1.v = 2-element list of type/value pairs
