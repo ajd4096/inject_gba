@@ -59,9 +59,6 @@ class	buffer_packer():
 	def	length(self):
 		return len(self._buffer)
 
-	def	tell(self):
-		return len(self._buffer)
-
 
 '''
 <	Little endian
@@ -83,11 +80,6 @@ class	buffer_unpacker():
 		result = struct.unpack_from(fmt, self._buffer, self._offset)
 		self._offset += struct.calcsize(fmt)
 		return result
-
-	def	iseof(self):
-		if self._offset >= len(self._buffer):
-			return True
-		return False
 
 	def	seek(self, offset):
 		if offset >= 0 and offset < len(self._buffer):
