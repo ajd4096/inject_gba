@@ -82,7 +82,6 @@ This will read alldata.psb.m and alldata.bin, and write out alldata.json with al
 """)
 	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to alldata_NNNN',		action='store_true',	default=False)
 	parser.add_option('-j',	'--json',	dest='json',		help='write JSON to alldata.json',		action='store_true',	default=False)
-	parser.add_option('-p',	'--parse',	dest='parse',		help='parse sub PSB files',			action='store_true',	default=False)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-t',	'--test',	dest='test',		help='test repacking PSB',			action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
