@@ -207,18 +207,16 @@ class	PSB():
 
 		# Read in the arrays of names
 		# These are a complex structure used to remove duplicate prefixes of the file names
-		unpacker.seek(self.header.offset_names)
-		self.names = self.unpack_names(unpacker)
+		self.unpack_names(unpacker)
 
 		# Read in the array of strings
-		unpacker.seek(self.header.offset_strings)
-		self.strings = self.unpack_strings(unpacker)
+		self.unpack_strings(unpacker)
 
 		# Read in the array of chunks
-		self.chunks = self.unpack_chunks(unpacker)
+		self.unpack_chunks(unpacker)
 
 		# Read in our tree of entries
-		self.entries = self.unpack_object(unpacker, '', self.header.offset_entries)
+		self.unpack_entries(unpacker)
 
 	def	print_json(self, file):
 		json.dump(self.entries, file, indent=1)
@@ -554,7 +552,7 @@ class	PSB():
 		return name
 		
 	def	unpack_chunks(self, unpacker):
-		chunks		= []
+		self.chunks		= []
 		chunk_offsets	= PSB_ARRAY()
 		chunk_lengths	= PSB_ARRAY()
 
@@ -582,10 +580,16 @@ class	PSB():
 				l = chunk_lengths.values[i]
 				unpacker.seek(self.header.offset_chunk_data + o)
 				d = unpacker.data()[:l]
-				chunks.append(d)
-		return chunks
+				self.chunks.append(d)
+
+	def	unpack_entries(self, unpacker):
+		unpacker.seek(self.header.offset_entries)
+		self.entries = self.unpack_object(unpacker, '', self.header.offset_entries)
 
 	def	unpack_names(self, unpacker):
+		self.names		= []
+
+		unpacker.seek(self.header.offset_names)
 		str1		= PSB_ARRAY()
 		str2		= PSB_ARRAY()
 		str3		= PSB_ARRAY()
@@ -599,11 +603,9 @@ class	PSB():
 		names		= []
 		for i in range(0, str3.count):
 			s = self.get_name(str1, str2, str3, i)
-			names.append(s)
+			self.names.append(s)
 			if global_vars.options.verbose:
 				print("Name %d %s" % (i, s))
-
-		return names
 
 	# Copied from exm2lib
 	def	get_name(self, str1, str2, str3, index):
@@ -626,7 +628,9 @@ class	PSB():
 		return accum
 
 	def	unpack_strings(self, unpacker):
-		strings	= []
+		self.strings	= []
+
+		unpacker.seek(self.header.offset_strings)
 		strings_array	= PSB_ARRAY()
 		strings_array.unpack(unpacker)
 
@@ -641,11 +645,10 @@ class	PSB():
 			for j in range(0, len(d)):
 				if d[j] == 0:
 					s = d[:j].decode('utf-8')
-					strings.append(s)
+					self.strings.append(s)
 					if global_vars.options.verbose:
 						print("String %d  @0x%X %s" % (i, o, s))
 					break
-		return strings
 
 class	PSB_HDR():
 	def	__init__(self):
