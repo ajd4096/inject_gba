@@ -628,33 +628,33 @@ class	PSB():
 		self.names		= []
 
 		unpacker.seek(self.header.offset_names)
-		str1	= self.unpack_object(unpacker, 'str1')
-		str2	= self.unpack_object(unpacker, 'str2')
-		str3	= self.unpack_object(unpacker, 'str3')
+		offsets	= self.unpack_object(unpacker, 'offsets')
+		tree	= self.unpack_object(unpacker, 'tree')
+		names	= self.unpack_object(unpacker, 'names')
 
 		if global_vars.options.verbose:
-			print("Parsing names arrays (%d)" % len(str3.v))
+			print("Parsing names arrays (%d)" % len(names.v))
 
-		for i in range(0, len(str3.v)):
-			s = self.get_name(str1, str2, str3, i)
+		for i in range(0, len(names.v)):
+			s = self.get_name(offsets, tree, names, i)
 			self.names.append(s)
 			if global_vars.options.verbose:
 				print("Name %d %s" % (i, s))
 
 	# Copied from exm2lib
-	def	get_name(self, str1, str2, str3, index):
+	def	get_name(self, offsets, tree, names, index):
 		accum = ""
 
-		a = str3.v[index];
-		b = str2.v[a];
+		a = names.v[index];
+		b = tree.v[a];
 		c = 0
 		d = 0
 		e = 0
 		#print("%d %d %d %d %d %c" % (a, b, c, d, e, chr(e)))
 
 		while b != 0:
-			c = str2.v[b]
-			d = str1.v[c]
+			c = tree.v[b]
+			d = offsets.v[c]
 			e = b - d
 			#print("%d %d %d %d %d %c" % (a, b, c, d, e, chr(e)))
 			b = c
