@@ -266,7 +266,6 @@ class	PSB():
 			packer('<B', t)
 		elif t >=4 and t <= 12:
 			# int, 0-8 bytes
-			packer('<B', t)
 			v = obj.v
 			if v == 0:
 				packer('<B', 4)
@@ -304,7 +303,6 @@ class	PSB():
 		elif t >= 25 and t <= 28:
 			# index into 'chunks' array, 1-4 bytes
 			if self.new_chunks:
-				packer('<B', t)
 				fn = obj.v
 				fd = open(fn, 'rb').read()
 				self.new_chunks.append(fd)
@@ -340,7 +338,7 @@ class	PSB():
 				# Remember our offset
 				list_of_offsets.append(next_offset)
 				# Remember our size for the next offset
-				next_offset = tmp_packer.length()
+				next_offset += tmp_packer.length()
 				# Remember our object data
 				list_of_objects.append(bytes(tmp_packer._buffer))
 			# Pack the list of offsets
@@ -491,7 +489,7 @@ class	PSB():
 			# Write out the chunk data into a file
 			if global_vars.options.files:
 				open(diskname, "wb").write(self.chunks[v])
-			return {'type':t, 'value':v, 'file':os.path.basename(diskname)}
+			return TypeValue(25, os.path.basename(diskname))
 		elif t == 29:
 			# float, 0 bytes?
 			t = unpacker('<B')[0]
