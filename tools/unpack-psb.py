@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import	fnmatch
 import	optparse
 import	os
 
@@ -44,13 +45,7 @@ def	extract_psb(psb_filename):
 	mypsb = psb.PSB(base_filename)
 	mypsb.unpack(psb_file_data, bin_file_data)
 
-	if global_vars.options.json:
-		j = open(base_filename + '.json', 'wt')
-		mypsb.print_json(j)
-
-	if global_vars.options.yaml:
-		j = open(base_filename + '.yaml', 'wt')
-		mypsb.print_yaml(j)
+	mypsb.print_yaml(open(base_filename + '.yaml', 'wt'))
 
 	if global_vars.options.test:
 		psb_data, bin_data = mypsb.pack()
@@ -67,26 +62,27 @@ def	main():
 """
 Examples:
 
-%prog -y alldata.psb.m
+%prog alldata.psb.m
 This will read alldata.psb.m and alldata.bin, and write out alldata.yaml
 
-%prog -f -y alldata.psb.m
+%prog -f alldata.psb.m
 This will read alldata.psb.m and alldata.bin, and write out alldata.yaml with all sub-files in alldata_0000_originalfilename etc
 
 """)
 	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to alldata_NNNN',		action='store_true',	default=False)
-	parser.add_option('-j',	'--json',	dest='json',		help='write JSON to alldata.json',		action='store_true',	default=False)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-t',	'--test',	dest='test',		help='test repacking PSB',			action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
-	parser.add_option('-y',	'--yaml',	dest='yaml',		help='write YAML to alldata.jaml',		action='store_true',	default=False)
 	(global_vars.options, args) = parser.parse_args()
 
 	if not args:
 		parser.print_help()
 
-	for psb_filename in args:
-		extract_psb(psb_filename)
+	for filename in args:
+		if fnmatch.fnmatch(filename, '*.psb'):
+			extract_psb(filename)
+		elif fnmatch.fnmatch(filename, '*.psb.m'):
+			extract_psb(filename)
 
 if __name__ == "__main__":
 	main()

@@ -4,7 +4,6 @@ import	collections
 import	ctypes
 import	hashlib
 import	html
-import	json
 import	mt19937
 import	optparse
 import	os
@@ -18,7 +17,8 @@ import	global_vars
 #
 # Define our object classes
 #
-# Note: we can't use __slots__ to save memory because that breaks __dict__ which we need for JSON
+# Note: we can't use __slots__ to save memory because that breaks __dict__ which we need for serialization
+#
 class	TypeValue(yaml.YAMLObject):
 	yaml_tag = u'!TV'
 	def	__init__(self, t, v):
@@ -43,13 +43,6 @@ class	FileLengthOffset(yaml.YAMLObject):
 		self.o = o
 	def	__repr__(self):
 		return "%s(f=%r, l=%r, o=%r)" % (self.__class__.__name__, self.f, self.l, self.o)
-
-#
-# Helper function to serialize our classes to python
-#
-def	jdefault(o):
-	return o.__dict__
-
 
 #
 # get the size of an int in bytes
@@ -250,9 +243,6 @@ class	PSB():
 
 		# Read in our tree of entries
 		self.unpack_entries(unpacker)
-
-	def	print_json(self, file):
-		json.dump(self.entries, file, default=jdefault, indent=1, sort_keys=True)
 
 	def	print_yaml(self, fp):
 		print(yaml.dump(self.entries), file=fp)
