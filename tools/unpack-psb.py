@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 
-import	binascii
-import	ctypes
-import	hashlib
-import	html
-import	json
-import	mt19937
 import	optparse
 import	os
-import	struct
-import	sys
-import	zlib
 
 import	psb
 import	global_vars
