@@ -22,17 +22,23 @@ class	TypeValue():
 	def	__init__(self, t, v):
 		self.t = t
 		self.v = v
+	def	__repr__(self):
+		return "%s(t=%r, v=%r)" % (self.__class__.__name__, self.t, self.v)
 
 class	NameObject():
 	def	__init__(self, n, o):
 		self.n = n
 		self.o = o
+	def	__repr__(self):
+		return "%s(n=%r, o=%r)" % (self.__class__.__name__, self.n, self.o)
 
 class	FileLengthOffset():
 	def	__init__(self, f, l, o,):
 		self.f = f
 		self.l = l
 		self.o = o
+	def	__repr__(self):
+		return "%s(f=%r, l=%r, o=%r)" % (self.__class__.__name__, self.f, self.l, self.o)
 
 #
 # Helper function to serialize our classes to python
