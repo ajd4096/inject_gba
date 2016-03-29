@@ -57,6 +57,10 @@ def	extract_psb(psb_filename):
 		j = open(base_filename + '.json', 'wt')
 		mypsb.print_json(j)
 
+	if global_vars.options.yaml:
+		j = open(base_filename + '.yaml', 'wt')
+		mypsb.print_yaml(j)
+
 	if global_vars.options.test:
 		psb_data, bin_data = mypsb.pack()
 		open(psb_filename + '.out', 'wb').write(psb_data)
@@ -72,11 +76,11 @@ def	main():
 """
 Examples:
 
-%prog -j alldata.psb.m
-This will read alldata.psb.m and alldata.bin, and write out alldata.json
+%prog -y alldata.psb.m
+This will read alldata.psb.m and alldata.bin, and write out alldata.yaml
 
-%prog -f -j alldata.psb.m
-This will read alldata.psb.m and alldata.bin, and write out alldata.json with all sub-files in alldata.json_0000 etc
+%prog -f -y alldata.psb.m
+This will read alldata.psb.m and alldata.bin, and write out alldata.yaml with all sub-files in alldata_0000_originalfilename etc
 
 """)
 	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to alldata_NNNN',		action='store_true',	default=False)
@@ -84,6 +88,7 @@ This will read alldata.psb.m and alldata.bin, and write out alldata.json with al
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-t',	'--test',	dest='test',		help='test repacking PSB',			action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
+	parser.add_option('-y',	'--yaml',	dest='yaml',		help='write YAML to alldata.jaml',		action='store_true',	default=False)
 	(global_vars.options, args) = parser.parse_args()
 
 	if not args:

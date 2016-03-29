@@ -10,6 +10,7 @@ import	optparse
 import	os
 import	struct
 import	sys
+import	yaml
 import	zlib
 
 import	global_vars
@@ -18,21 +19,24 @@ import	global_vars
 # Define our object classes
 #
 # Note: we can't use __slots__ to save memory because that breaks __dict__ which we need for JSON
-class	TypeValue():
+class	TypeValue(yaml.YAMLObject):
+	yaml_tag = u'!TV'
 	def	__init__(self, t, v):
 		self.t = t
 		self.v = v
 	def	__repr__(self):
 		return "%s(t=%r, v=%r)" % (self.__class__.__name__, self.t, self.v)
 
-class	NameObject():
+class	NameObject(yaml.YAMLObject):
+	yaml_tag = u'!NO'
 	def	__init__(self, n, o):
 		self.n = n
 		self.o = o
 	def	__repr__(self):
 		return "%s(n=%r, o=%r)" % (self.__class__.__name__, self.n, self.o)
 
-class	FileLengthOffset():
+class	FileLengthOffset(yaml.YAMLObject):
+	yaml_tag = u'!FLO'
 	def	__init__(self, f, l, o,):
 		self.f = f
 		self.l = l
@@ -249,6 +253,9 @@ class	PSB():
 
 	def	print_json(self, file):
 		json.dump(self.entries, file, default=jdefault, indent=1, sort_keys=True)
+
+	def	print_yaml(self, fp):
+		print(yaml.dump(self.entries), file=fp)
 
 	#
 	# based on exm2lib get_number()
