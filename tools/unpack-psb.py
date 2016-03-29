@@ -33,17 +33,16 @@ def	extract_psb(psb_filename):
 		print("PSB header not found")
 		return
 
-	base_filename = None
-	bin_filename  = None
-	json_filename = None
-	b1, e1 = os.path.splitext(psb_filename)
-	if (e1 == '.m'):
-		b2, e2 = os.path.splitext(b1)
-		if (e2 == '.psb'):
-			base_filename = b2
-			bin_filename  = b2 + ".bin"
-			json_filename = b2 + ".json"
+	# Get the base filename without any .psb.m
+	base_filename = psb_filename
+	b, e = os.path.splitext(base_filename)
+	if (e == '.m'):
+		base_filename = b
+	b, e = os.path.splitext(base_filename)
+	if (e == '.psb'):
+		base_filename = b
 
+	bin_filename  = base_filename + '.bin'
 	if os.path.isfile(bin_filename):
 		if global_vars.options.verbose:
 			print("Reading file %s" % bin_filename)
@@ -55,7 +54,7 @@ def	extract_psb(psb_filename):
 	mypsb.unpack(psb_file_data, bin_file_data)
 
 	if global_vars.options.json:
-		j = open(json_filename, 'wt')
+		j = open(base_filename + '.json', 'wt')
 		mypsb.print_json(j)
 
 	if global_vars.options.test:
