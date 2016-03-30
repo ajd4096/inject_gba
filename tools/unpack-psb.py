@@ -42,15 +42,11 @@ def	extract_psb(psb_filename):
 	else:
 		bin_file_data = None
 
-	mypsb = psb.PSB(base_filename)
+	mypsb = psb.PSB()
 	mypsb.unpack(psb_file_data, bin_file_data)
 
-	mypsb.print_yaml(open(base_filename + '.yaml', 'wt'))
+	mypsb.print_yaml(open(global_vars.options.basename + '.yaml', 'wt'))
 
-	if global_vars.options.test:
-		psb_data, bin_data = mypsb.pack()
-		open(psb_filename + '.out', 'wb').write(psb_data)
-		open(bin_filename + '.out', 'wb').write(bin_data)
 
 def	main():
 
@@ -62,17 +58,17 @@ def	main():
 """
 Examples:
 
-%prog alldata.psb.m
-This will read alldata.psb.m and alldata.bin, and write out alldata.yaml
+%prog -b output alldata.psb.m
+This will read alldata.psb.m (and alldata.bin) and create output.yaml
 
-%prog -f alldata.psb.m
-This will read alldata.psb.m and alldata.bin, and write out alldata.yaml with all sub-files in alldata_0000_originalfilename etc
+%prog -f -b output alldata.psb.m
+This will read alldata.psb.m (and alldata.bin) and create output.yaml with all sub-files in output_0000_filename etc
 
 """)
-	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to alldata_NNNN',		action='store_true',	default=False)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
-	parser.add_option('-t',	'--test',	dest='test',		help='test repacking PSB',			action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
+	parser.add_option('-b',	'--basename',	dest='basename',	help='write yaml to BASE.yaml',			metavar='BASE')
+	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to BASE_NNNN_filename',	action='store_true',	default=False)
 	(global_vars.options, args) = parser.parse_args()
 
 	if not args:

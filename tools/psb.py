@@ -145,8 +145,7 @@ struct PSBHDR {
 '''
 
 class	PSB():
-	def	__init__(self, basename):
-		self.basename		= basename
+	def	__init__(self):
 		self.bin_data		= None
 		self.header		= PSB_HDR()
 		self.names		= []
@@ -362,7 +361,7 @@ class	PSB():
 					if self.new_files:
 						print("Reading in '%s' for '%s'" % (obj_data.f, obj_name))
 						# Read in the raw data
-						fd = open(os.path.join(os.path.dirname(self.basename), obj_data.f), 'rb').read()
+						fd = open(os.path.join(os.path.dirname(global_vars.options.basename), obj_data.f), 'rb').read()
 						print("Raw length %d 0x%X" % (len(fd), len(fd)))
 						# Compress the data
 						if '.jpg.m' in obj_name:
@@ -586,7 +585,7 @@ class	PSB():
 
 	# Get the next sub-file name
 	def	getFilename(self):
-		name = "%s_%4.4d" % (self.basename, self.file_number)
+		name = "%s_%4.4d" % (global_vars.options.basename, self.file_number)
 		self.file_number += 1
 		return name
 		
