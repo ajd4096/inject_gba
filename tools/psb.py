@@ -208,7 +208,7 @@ class	PSB():
 		#self.pack_names(unpacker)
 
 		# Pack the array of strings
-		#self.pack_strings(unpacker)
+		self.pack_strings(packer)
 
 		# Pack the array of chunks
 		#self.pack_chunks(unpacker)
@@ -725,6 +725,30 @@ class	PSB():
 			b = c
 			accum = chr(e) + accum
 		return accum
+
+	#
+	# Pack our strings[] array, and update our header with the offsets
+	#
+	def	pack_strings(self, packer):
+		# Build the list of offsets
+		offsets = []
+		offset = 0
+		for s in self.strings:
+			se = s.encode('utf-8')
+			l = len(se) +1	# +1 for the NUL byte
+			offsets.append(l)
+			offset += l
+
+		# Pack our offsets array object
+		self.header.offsets_strings		= packer.tell()
+		self.pack_object(packer, 'strings', TypeValue(13, offsets))
+
+		# Pack our data
+		self.header.offsets_strings_data	= packer.tell()
+		for s in self.strings:
+			se = s.encode('utf-8')
+			l = len(se) +1	# +1 for the NUL byte
+			packer('<%ds' % l, se)
 
 	def	unpack_strings(self, unpacker):
 		self.strings	= []
