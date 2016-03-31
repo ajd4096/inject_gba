@@ -29,20 +29,21 @@ class	TypeValue(yaml.YAMLObject):
 
 class	NameObject(yaml.YAMLObject):
 	yaml_tag = u'!NO'
-	def	__init__(self, n, o):
-		self.n = n
-		self.o = o
+	def	__init__(self, ni, ns, o):
+		self.ni = ni	# index into names[]
+		self.ns = ns	# string from names[]
+		self.o = o	# object
 	def	__repr__(self):
-		return "%s(n=%r, o=%r)" % (self.__class__.__name__, self.n, self.o)
+		return "%s(ni=%r, ns=%r, o=%r)" % (self.__class__.__name__, self.ni, self.ns, self.o)
 
-class	FileLengthOffset(yaml.YAMLObject):
-	yaml_tag = u'!FLO'
-	def	__init__(self, f, l, o,):
-		self.f = f
-		self.l = l
-		self.o = o
+class	FileInfo(yaml.YAMLObject):
+	yaml_tag = u'!FI'
+	def	__init__(self, i, l, o,):
+		self.i = i	# index into files[], filenames[]
+		self.l = l	# original length
+		self.o = o	# original offset
 	def	__repr__(self):
-		return "%s(f=%r, l=%r, o=%r)" % (self.__class__.__name__, self.f, self.l, self.o)
+		return "%s(i=%r, l=%r, o=%r)" % (self.__class__.__name__, self.i, self.l, self.o)
 
 #
 # get the size of an int in bytes
@@ -146,14 +147,19 @@ struct PSBHDR {
 
 class	PSB():
 	def	__init__(self):
-		self.bin_data		= None
 		self.header		= PSB_HDR()
-		self.names		= []
-		self.strings		= [] 
-		self.chunks		= []
+
+		self.names		= []	# list of strings indexed by NameObject.ni
+		self.strings		= [] 	# list of strings index by Type 21-24
+		self.chunkdata		= []	# raw data indexed by Type 25-28
+		self.chunknames		= []	# CNNNN filenames for each chunk
 		self.entries		= None
-		self.file_number	= 0
-		self.files		= []
+		self.filedata		= []	# uncompress/unencrypted data for each file
+		self.filenames		= []	# FNNNN filenames for each file_info 
+		# Stashed when unpacking, used after to load the file data
+		self.fileoffsets	= []
+		self.filelengths	= []
+		self.filenameindex	= []
 		# Variables used for repacking
 		self.new_names		= None
 		self.new_strings	= None
@@ -180,31 +186,26 @@ class	PSB():
 	def	pack(self):
 		packer = buffer_packer()
 
-		# Walk the 'entries' tree to build our list of new_names
-		# new_names is built in tree order, but the original seems to be sorted
-		self.new_names	= []
-		self.new_strings = None
-		self.new_chunks = None
-		self.new_files  = None
-		entries_packer = buffer_packer()
-		self.pack_object(entries_packer, '', self.entries)
+		# Encrypt/compress/concat our files
 
-		# Sort the new_names list, then repack the tree to get the correct indexes for the names array
-		self.new_names.sort()
+		# Write out our dummy header
+		#self.header.pack(packer)
 
-		# Walk the 'entries' tree to build our list of new_strings, new_chunks new_files lists
-		self.new_strings = []
-		self.new_chunks = []
-		self.new_files  = []
-		entries_packer = buffer_packer()
-		self.pack_object(entries_packer, '', self.entries)
-		entries_data = entries_packer._buffer
+		# Pack the array of names
+		#self.pack_names(unpacker)
 
-		if global_vars.options.verbose:
-			for i in range(0, len(self.new_names)):
-				print("Name %d %s" % (i, self.new_names[i]))
-			for i in range(0, len(self.new_strings)):
-				print("String %d %s\n" % (i, self.new_strings[i]))
+		# Pack the array of strings
+		#self.pack_strings(unpacker)
+
+		# Pack the array of chunks
+		#self.pack_chunks(unpacker)
+
+		# Pack our tree of entries
+		#self.pack_entries(unpacker)
+
+		# Rewrite the header with the correct offsets
+		#packer.seek(0)
+		#self.header.pack(packer)
 
 		psb_data = bytearray(packer._buffer)
 		bin_data = bytearray([])
@@ -218,8 +219,6 @@ class	PSB():
 			print("Parsing header:")
 			l = len(unpacker.data())
 			print("PSB data length %d 0x%X" % (l, l))
-
-		self.bin_data = bin_data
 
 		self.header.unpack(unpacker)
 		if self.header.signature != b'PSB\x00':
@@ -243,8 +242,44 @@ class	PSB():
 		# Read in our tree of entries
 		self.unpack_entries(unpacker)
 
-	def	print_yaml(self, fp):
-		print(yaml.dump(self.entries), file=fp)
+		# Extract our subfiles
+		if (bin_data):
+			self.extractSubFiles(bin_data)
+
+	def	print_yaml(self):
+		# Create a top-level dict to dump
+		level0 = {
+			'names':	self.names,
+			'strings':	self.strings,
+			'chunknames':	self.chunknames,
+			'entries':	self.entries,
+			'filenames':	self.filenames,
+		}
+		return yaml.dump(level0)
+
+	def	load_yaml(self, data):
+		# FIXME - use yaml.safe_load
+		level0 = yaml.load(data)
+		if isinstance(level0, dict):
+			self.names		= level0['names']
+			self.strings		= level0['strings']
+			self.chunknames		= level0['chunknames']
+			self.entries		= level0['entries']
+			self.filenames		= level0['filenames']
+			# Read in our subfiles
+			self.filedata = []
+			for filename in self.filenames:
+				if global_vars.options.verbose:
+					print("Reading file '%s'" % filename)
+				data = open(filename, 'rb').read()
+				self.filedata.append(data)
+			# Read in our chunk files
+			self.chunkdata = []
+			for filename in self.chunknames:
+				if global_vars.options.verbose:
+					print("Reading chunk '%s'" % filename)
+				data = open(filename, 'rb').read()
+				self.chunkdata.append(data)
 
 	#
 	# based on exm2lib get_number()
@@ -281,24 +316,14 @@ class	PSB():
 				packer('<%ds' % s, v.to_bytes(s, 'little'))
 		elif t >= 21 and t <= 24:
 			# index into 'strings' array (1-4 bytes)
-			if self.new_strings:
-				vs = obj.v
-				if not vs in self.new_strings:
-					self.new_strings.append(vs)
-				i = self.new_strings.index(vs)
-				s = getIntSize(i)
-				packer('<B', 20 + s)
-				packer('<%ds' % s, i.to_bytes(s, 'little'))
+			s = getIntSize(v)
+			packer('<B', 20 + s)
+			packer('<%ds' % s, v.to_bytes(s, 'little'))
 		elif t >= 25 and t <= 28:
 			# index into 'chunks' array, 1-4 bytes
-			if self.new_chunks:
-				fn = obj.v
-				fd = open(fn, 'rb').read()
-				self.new_chunks.append(fd)
-				i = len(self.new_chunks) - 1
-				s = getIntSize(i)
-				packer('<B', 24 + s)
-				packer('<%ds' % s, i.to_bytes(s, 'little'))
+			s = getIntSize(v)
+			packer('<B', 24 + s)
+			packer('<%ds' % s, v.to_bytes(s, 'little'))
 		elif t == 29:
 			# 0 byte float
 			packer('<B', t)
@@ -345,18 +370,16 @@ class	PSB():
 			list_of_offsets = []
 			list_of_objects	= []
 			for o in v:
-				obj_name = o.n
+				obj_name_index = o.ni
+				obj_name = o.ns
 				obj_data = o.o
-				if global_vars.options.test:
+				if global_vars.options.verbose:
 					print("<<< %s %s" % ('name', obj_name))
-				# Add the name to our (psb-global) list of names
-				if not obj_name in self.new_names:
-					self.new_names.append(obj_name)
-				obj_name_index = self.new_names.index(obj_name)
 				# If the type33 is a file_info, each member is a file
 				if name == '|file_info':
-					assert(type(obj_data) == FileLengthOffset)
-					print('<<<', obj_data)
+					assert(type(obj_data) == FileInfo)
+					if global_vars.options.verbose:
+						print('<<<', obj_data)
 					# If we have a file, read it in and fix the offset/length before packing the object
 					if self.new_files:
 						print("Reading in '%s' for '%s'" % (obj_data.f, obj_name))
@@ -422,7 +445,9 @@ class	PSB():
 			assert(False)
 
 	def	unpack_object(self, unpacker, name):
-		#print(">>> %s @0x%X" % (name, offset))
+		if global_vars.options.verbose:
+			print(">>> %s @0x%X" % (name, unpacker.tell()))
+			print(unpacker.peek('<16B'))
 		t = unpacker.peek('<B')[0]
 		if t >= 1 and t <= 3:
 			# from exm2lib & inspection, length = 0, purpose unknown
@@ -441,8 +466,7 @@ class	PSB():
 		elif t >= 5 and t <= 12:
 			# int, 1-8 bytes
 			t = unpacker('<B')[0]
-			s = t - 4
-			v = int.from_bytes(unpacker('<%dB' % s), 'little')
+			v = int.from_bytes(unpacker('<%dB' % (t - 5 + 1)), 'little')
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
 			return TypeValue(t, v)
@@ -464,21 +488,15 @@ class	PSB():
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X type %d value string %d" % (name, offset, t, v))
 			assert(v <= len(self.strings))
-			vs = self.strings[v]
-			return TypeValue(t, vs)
+			return TypeValue(t, v)
 		elif t >= 25 and t <= 28:
 			# index into chunks array, 1-4 bytes
 			t = unpacker('<B')[0]
 			v = int.from_bytes(unpacker('<%dB' % (t - 25 + 1)), 'little')
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X type %d value chunk %d" % (name, offset, t, v))
-			assert(v <= len(self.chunks))
-			# Build the name of our sub-file for the chunk
-			diskname = self.getFilename()
-			# Write out the chunk data into a file
-			if global_vars.options.files:
-				open(diskname, "wb").write(self.chunks[v])
-			return TypeValue(25, os.path.basename(diskname))
+			assert(v <= len(self.chunkdata))
+			return TypeValue(t, v)
 		elif t == 29:
 			# float, 0 bytes?
 			t = unpacker('<B')[0]
@@ -500,6 +518,7 @@ class	PSB():
 				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
 			return TypeValue(t, v)
 		elif t == 32:
+			# array of objects
 			# from exm2lib, array of offsets of objects, followed by the objects
 			t = unpacker('<B')[0]
 			offsets = self.unpack_object(unpacker, name + '|offsets')
@@ -516,8 +535,7 @@ class	PSB():
 				v.append(v1)
 			return TypeValue(t, v)
 		elif t == 33:
-			if global_vars.options.verbose:
-				print(unpacker.peek('<16B'))
+			# array of name-objects
 			# from exm2lib, array of int name indexes, array of int offsets, followed by objects
 			t = unpacker('<B')[0]
 			names   = self.unpack_object(unpacker, name + '|names')
@@ -534,14 +552,20 @@ class	PSB():
 				if global_vars.options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
 					print(unpacker.peek('<16B'))
+
 				# Unpack the object at the offset
 				unpacker.seek(seek_base + o)
 				v1 = self.unpack_object(unpacker, name + "|%s" % ns)
+
 				# If we're a file_info list, the object is a type 32 collection containing the offset & length values of the file data in alldata.bin
-				# If we have the alldata.bin file, extract the data
-				if name == '|file_info' and self.bin_data:
+				if name == '|file_info':
 					# Build the name of our sub-file
-					diskname = self.getFilename() + "_" + os.path.basename(ns)
+					diskname = self.getFilename(i) + "_" + os.path.basename(ns)
+
+					# If it looks like our rom, output the filename
+					if 'system/roms' in ns:
+						print("ROM in '%s'" % diskname)
+
 					# Get the offset and length
 					# v1.t == 32
 					# v1.v = 2-element list of type/value pairs
@@ -552,30 +576,17 @@ class	PSB():
 					assert(v1.v[0].t >= 4)
 					assert(v1.v[0].t <= 12)
 					fo = v1.v[0].v
-					assert(fo <= len(self.bin_data))
 					assert(v1.v[1].t >= 4)
 					assert(v1.v[1].t <= 12)
 					fl = v1.v[1].v
-					assert((fo + fl) <= len(self.bin_data))
-					# Extract the data chunk
-					fd = self.bin_data[fo : fo + fl]
-					#open(diskname + '.1', "wb").write(fd)
-					# Add the (possibly compressed/encrypted) data to our files array
-					self.files.append(fd)
-					# Unobfuscate the data using the filename for the seed
-					unobfuscate_data(fd, ns)
-					#open(diskname + '.2', "wb").write(fd)
-					# Uncompress the data
-					fd = uncompress_data(fd)
-					# Write out the file.
-					if global_vars.options.files:
-						print(">>> file '%s'" % ns)
-						print(">>> disk '%s'" % os.path.basename(diskname))
-						print(">>> len %d" % len(fd))
-						open(diskname, "wb").write(fd)
-					v.append(NameObject(ns, FileLengthOffset(os.path.basename(diskname), fl, fo)))
-				else:
-					v.append(NameObject(ns, v1))
+
+					# Save the filename, offset, length
+					self.filenames.append(diskname)
+					self.fileoffsets.append(fo)
+					self.filelengths.append(fl)
+					self.filenameindex.append(ni)
+
+				v.append(NameObject(ni, ns, v1))
 			return TypeValue(t, v)
 
 		else:
@@ -583,14 +594,50 @@ class	PSB():
 			print("Unknown type")
 			print(unpacker.peek('<16B'))
 
-	# Get the next sub-file name
-	def	getFilename(self):
-		name = "%s_%4.4d" % (global_vars.options.basename, self.file_number)
-		self.file_number += 1
+	def	extractSubFiles(self, bin_data):
+		for i in range(0, len(self.filenames)):
+			fo = self.fileoffsets[i]
+			fl = self.filelengths[i]
+			assert(fo <= len(bin_data))
+			assert((fo + fl) <= len(bin_data))
+
+			ni = self.filenameindex[i]
+			ns = self.names[ni]
+
+			# Extract the data chunk
+			fd = bin_data[fo : fo + fl]
+			#open(diskname + '.1', "wb").write(fd)
+
+			# Unobfuscate the data using the original filename for the seed
+			unobfuscate_data(fd, ns)
+			#open(diskname + '.2', "wb").write(fd)
+
+			# Uncompress the data
+			fd = uncompress_data(fd)
+			#open(diskname, "wb").write(fd)
+
+			# Save the unobfuscated/uncompressed data to our files array
+			self.filedata.append(fd)
+
+
+	# Get the chunk filename
+	def	getChunkFilename(self, chunk_index):
+		if global_vars.options.basename:
+			name = "%s_C%4.4d" % (os.path.basename(global_vars.options.basename), chunk_index)
+		else:
+			name = "%s_C%4.4d" % ('BASE', chunk_index)
+		return name
+		
+	# Get the sub-file filename
+	def	getFilename(self, file_index):
+		if global_vars.options.basename:
+			name = "%s_F%4.4d" % (os.path.basename(global_vars.options.basename), file_index)
+		else:
+			name = "%s_F%4.4d" % ('BASE', file_index)
 		return name
 		
 	def	unpack_chunks(self, unpacker):
-		self.chunks		= []
+		self.chunkdata		= []
 
 		# Read in our chunk offsets array (this may be empty)
 		unpacker.seek(self.header.offset_chunk_offsets)
@@ -616,9 +663,14 @@ class	PSB():
 			for i in range(0, len(chunk_offsets.v)):
 				o = chunk_offsets.v[i]
 				l = chunk_lengths.v[i]
+
+				# Save the chunk data
 				unpacker.seek(self.header.offset_chunk_data + o)
 				d = unpacker.data()[:l]
-				self.chunks.append(d)
+				self.chunkdata.append(d)
+
+				# Save the chunk filename
+				self.chunknames.append(self.getChunkFilename(i))
 
 	def	unpack_entries(self, unpacker):
 		unpacker.seek(self.header.offset_entries)

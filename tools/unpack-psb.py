@@ -45,7 +45,34 @@ def	extract_psb(psb_filename):
 	mypsb = psb.PSB()
 	mypsb.unpack(psb_file_data, bin_file_data)
 
-	mypsb.print_yaml(open(global_vars.options.basename + '.yaml', 'wt'))
+	if global_vars.options.basename:
+		# Make sure the directory exists
+		base_dir = os.path.dirname(global_vars.options.basename)
+		if base_dir:
+			os.makedirs(base_dir, exist_ok = True)
+
+		# Write out the yaml file
+		filename = global_vars.options.basename + '.yaml'
+		if os.path.isfile(filename):
+			print("File '%s' exists, not over-writing" % filename)
+		else:
+			open(filename, 'wt').write(mypsb.print_yaml())
+
+		if global_vars.options.files:
+			# Write out our subfiles
+			for i, fn in enumerate(mypsb.filenames):
+				filename = os.path.join(base_dir, fn)
+				if os.path.isfile(filename):
+					print("File '%s' exists, not over-writing" % filename)
+				else:
+					open(filename, 'wb').write(mypsb.filedata[i])
+			# Write out our chunks
+			for i, fn in enumerate(mypsb.chunknames):
+				filename = os.path.join(base_dir, fn)
+				if os.path.isfile(filename):
+					print("File '%s' exists, not over-writing" % filename)
+				else:
+					open(filename, 'wb').write(mypsb.chunkdata[i])
 
 
 def	main():
@@ -56,6 +83,7 @@ def	main():
 
 	parser = MyParser(usage='Usage: %prog [options] <psb filename>', epilog=
 """
+-----
 Examples:
 
 %prog -b output alldata.psb.m
