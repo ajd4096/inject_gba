@@ -211,7 +211,7 @@ class	PSB():
 		self.pack_strings(packer)
 
 		# Pack the array of chunks
-		#self.pack_chunks(unpacker)
+		self.pack_chunks(packer)
 
 		# Pack our tree of entries
 		#self.pack_entries(unpacker)
@@ -648,6 +648,30 @@ class	PSB():
 		else:
 			name = "%s_F%4.4d" % ('BASE', file_index)
 		return name
+		
+	def	pack_chunks(self, packer):
+		# Build a lists of offsets and lengths
+		offsets = []
+		lengths	= []
+		offset = 0
+		for i in range(0, len(self.chunkdata)):
+			l = len(self.chunkdata[i])
+			offsets.append(offset)
+			lengths.append(l)
+			offset += l
+
+		# Pack our offsets array
+		self.header.offset_chunk_offsets	= packer.tell()
+		self.pack_object(packer, 'chunk_offsets', TypeValue(13, offsets))
+
+		# Pack our lengths array
+		self.header.offset_chunk_lengths	= packer.tell()
+		self.pack_object(packer, 'chunk_lengths', TypeValue(13, lengths))
+
+		# Pack our data
+		self.header.offset_chunk_data		= packer.tell()
+		for i in range(0, len(self.chunkdata)):
+			packer('<%ds' % len(self.chunks[i]), self.chunkdata[i])
 		
 	def	unpack_chunks(self, unpacker):
 		self.chunkdata		= []
