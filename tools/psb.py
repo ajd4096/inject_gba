@@ -56,12 +56,24 @@ def	getIntSize(v):
 class	buffer_packer():
 	def __init__(self):
 		self._buffer = []
+		self._offset = 0	# points to the *next* byte to write
 
 	def __call__(self, fmt, data):
-		self._buffer += struct.pack(fmt, data)
+		packed_data = struct.pack(fmt, data)
+		packed_length = len(packed_data)
+		self._buffer[self._offset : self._offset + packed_length] = packed_data
+		self._offset += packed_length
 
 	def	length(self):
 		return len(self._buffer)
+
+	def	seek(self, offset):
+		if len(self._buffer) < offset:
+			self._buffer = self._buffer + [0] * (offset - len(self._buffer) + 1)
+		self._offset = offset
+
+	def	tell(self):
+		return self._offset
 
 
 '''
