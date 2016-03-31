@@ -690,7 +690,7 @@ class	PSB():
 		chunk_lengths = self.unpack_object(unpacker, 'chunk_lengths')
 		if global_vars.options.verbose:
 			print("Chunk lengths count %d" % len(chunk_lengths.v))
-			for i in range(0, chunk_lengths.count):
+			for i in range(0, len(chunk_lengths.v)):
 				print("Chunk length %d = %d 0x%X" % (i, chunk_lengths.v[i], chunk_lengths.v[i]))
 
 		assert(len(chunk_offsets.v) == len(chunk_lengths.v))
