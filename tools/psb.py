@@ -201,7 +201,8 @@ class	PSB():
 		# Encrypt/compress/concat our files
 
 		# Write out our dummy header
-		#self.header.pack(packer)
+		self.header.signature = b'PSB\x00'
+		self.header.pack(packer)
 
 		# Pack the array of names
 		#self.pack_names(unpacker)
@@ -216,8 +217,8 @@ class	PSB():
 		#self.pack_entries(unpacker)
 
 		# Rewrite the header with the correct offsets
-		#packer.seek(0)
-		#self.header.pack(packer)
+		packer.seek(0)
+		self.header.pack(packer)
 
 		psb_data = bytearray(packer._buffer)
 		bin_data = bytearray([])
@@ -774,6 +775,18 @@ class	PSB_HDR():
 		o += "offset_entries 0x%X\n"		% self.offset_entries
 		return o
 
+
+	def	pack(self, packer):
+ 		packer('>4s',	bytes(self.signature))
+ 		packer('<I',	self.type)
+ 		packer('<I',	self.unknown1)
+ 		packer('<I',	self.offset_names)
+ 		packer('<I',	self.offset_strings)
+ 		packer('<I',	self.offset_strings_data)
+ 		packer('<I',	self.offset_chunk_offsets)
+ 		packer('<I',	self.offset_chunk_lengths)
+ 		packer('<I',	self.offset_chunk_data)
+ 		packer('<I',	self.offset_entries)
 
 	def	unpack(self, unpacker):
 		self.signature			= unpacker('>4s')[0]
