@@ -177,17 +177,6 @@ class	PSB():
 		self.chunknames		= []	# CNNNN filenames for each chunk
 		self.entries		= None
 		self.fileinfo		= []	# Stash of FileInfo objects (easier than walking the entries tree)
-		self.filedata		= []	# uncompress/unencrypted data for each file
-		#self.filenames		= []	# FNNNN filenames for each file_info 
-		# Stashed when unpacking, used after to load the file data
-		#self.fileoffsets	= []
-		#self.filelengths	= []
-		#self.filenameindex	= []
-		# Variables used for repacking
-		self.new_names		= None
-		self.new_strings	= None
-		self.new_chunks		= None
-		self.new_files		= None
 
 	def	__str__(self):
 		o = "PSB:\n"
@@ -706,32 +695,6 @@ class	PSB():
 			print(">>> %s @0x%X" % (name, offset))
 			print("Unknown type")
 			print(unpacker.peek16())
-
-	def	extractSubFiles(self, bin_data):
-		for fi in self.fileinfo:
-			fo = fi.o
-			fl = fi.l
-			assert(fo <= len(bin_data))
-			assert((fo + fl) <= len(bin_data))
-
-			ni = fi.ni
-			ns = self.names[ni]
-
-			# Extract the data chunk
-			fd = bin_data[fo : fo + fl]
-			#open(diskname + '.1', "wb").write(fd)
-
-			# Unobfuscate the data using the original filename for the seed
-			unobfuscate_data(fd, ns)
-			#open(diskname + '.2', "wb").write(fd)
-
-			# Uncompress the data
-			fd = uncompress_data(fd)
-			#open(diskname, "wb").write(fd)
-
-			# Save the unobfuscated/uncompressed data to our files array
-			self.filedata.append(fd)
-
 
 	# Get the chunk filename
 	def	getChunkFilename(self, chunk_index):
