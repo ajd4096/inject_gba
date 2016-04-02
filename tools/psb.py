@@ -37,12 +37,13 @@ class	NameObject(yaml.YAMLObject):
 
 class	FileInfo(yaml.YAMLObject):
 	yaml_tag = u'!FI'
-	def	__init__(self, i, l, o,):
-		self.i = i	# index into files[], filenames[]
-		self.l = l	# original length
-		self.o = o	# original offset
+	def	__init__(self, ni, dn, l, o,):
+		self.ni	= ni	# index into names[]
+		self.dn	= dn	# diskname in BASE+NNNN form
+		self.l	= l	# original length
+		self.o	= o	# original offset
 	def	__repr__(self):
-		return "%s(i=%r, l=%r, o=%r)" % (self.__class__.__name__, self.i, self.l, self.o)
+		return "%s(ni=%r, dn=%r l=%r, o=%r)" % (self.__class__.__name__, self.ni, self.dn, self.l, self.o)
 
 #
 # get the size of an int in bytes
@@ -171,12 +172,13 @@ class	PSB():
 		self.chunkdata		= []	# raw data indexed by Type 25-28
 		self.chunknames		= []	# CNNNN filenames for each chunk
 		self.entries		= None
+		self.fileinfo		= []	# Stash of FileInfo objects (easier than walking the entries tree)
 		self.filedata		= []	# uncompress/unencrypted data for each file
-		self.filenames		= []	# FNNNN filenames for each file_info 
+		#self.filenames		= []	# FNNNN filenames for each file_info 
 		# Stashed when unpacking, used after to load the file data
-		self.fileoffsets	= []
-		self.filelengths	= []
-		self.filenameindex	= []
+		#self.fileoffsets	= []
+		#self.filelengths	= []
+		#self.filenameindex	= []
 		# Variables used for repacking
 		self.new_names		= None
 		self.new_strings	= None
@@ -271,7 +273,7 @@ class	PSB():
 			'strings':	self.strings,
 			'chunknames':	self.chunknames,
 			'entries':	self.entries,
-			'filenames':	self.filenames,
+			'fileinfo':	self.fileinfo,
 		}
 		return yaml.dump(level0)
 
@@ -283,13 +285,13 @@ class	PSB():
 			self.strings		= level0['strings']
 			self.chunknames		= level0['chunknames']
 			self.entries		= level0['entries']
-			self.filenames		= level0['filenames']
+			self.fileinfo		= level0['fileinfo']
 			# Read in our subfiles
 			self.filedata = []
-			for filename in self.filenames:
+			for fi in self.fileinfo:
 				if global_vars.options.verbose:
-					print("Reading file '%s'" % filename)
-				data = open(filename, 'rb').read()
+					print("Reading file '%s'" % fi.dn)
+				data = open(fi.dn, 'rb').read()
 				self.filedata.append(data)
 			# Read in our chunk files
 			self.chunkdata = []
@@ -563,49 +565,56 @@ class	PSB():
 			assert(len(names.v) == len(offsets.v))
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X (%d entries)" % (name, offset, len(names.v)))
+			if name == '|file_info':
+				# If we are a file_info list, each object is a type 32 collection containing the offset & length values of the file data in alldata.bin
+				# We build a list of FileInfo objects in the PSB, and ignore the list in the tree.
+				v = []
+				for i, ni in enumerate(names.v):
+					ns = self.names[ni]
+					o = offsets.v[i]
+					if global_vars.options.verbose:
+						print(">>> %s|%s @0x%X entry %d:" % (name, ns, offset, i))
+						print(unpacker.peek16())
+
+					# Unpack the object at the offset
+					unpacker.seek(seek_base + o)
+					v1 = self.unpack_object(unpacker, name + "|%s" % ns)
+
+					# Sanity check our object
+					assert(v1.t == 32)
+					assert(len(v1.v) == 2)
+					assert(v1.v[0].t >= 4)
+					assert(v1.v[0].t <= 12)
+					assert(v1.v[1].t >= 4)
+					assert(v1.v[1].t <= 12)
+
+					# Build the name of our sub-file
+					diskname = self.getFilename(i) + "_" + os.path.basename(ns)
+
+					# Get the offset and length
+					fo = v1.v[0].v
+					fl = v1.v[1].v
+
+					# Save the FileInfo in our stash, but not to our entries tree list
+					self.fileinfo.append(FileInfo(ni, diskname, fl, fo))
+
+			# For each entry in the name list...
 			v = []
-			for i in range(0, len(names.v)):
-				ni = names.v[i]
+			for i, ni in enumerate(names.v):
+				# Get the name string and the offset
 				ns = self.names[ni]
 				o = offsets.v[i]
 				if global_vars.options.verbose:
-					print(">>> %s @0x%X entry %d:" % (name, offset, i))
+					print(">>> %s|%s @0x%X entry %d:" % (name, ns, offset, i))
 					print(unpacker.peek16())
 
 				# Unpack the object at the offset
 				unpacker.seek(seek_base + o)
 				v1 = self.unpack_object(unpacker, name + "|%s" % ns)
 
-				# If we're a file_info list, the object is a type 32 collection containing the offset & length values of the file data in alldata.bin
-				if name == '|file_info':
-					# Build the name of our sub-file
-					diskname = self.getFilename(i) + "_" + os.path.basename(ns)
-
-					# If it looks like our rom, output the filename
-					if 'system/roms' in ns:
-						print("ROM in '%s'" % diskname)
-
-					# Get the offset and length
-					# v1.t == 32
-					# v1.v = 2-element list of type/value pairs
-					# list index 0 value = offset (type 4-12)
-					# list index 1 value = length (type 4-12)
-					assert(v1.t == 32)
-					assert(len(v1.v) == 2)
-					assert(v1.v[0].t >= 4)
-					assert(v1.v[0].t <= 12)
-					fo = v1.v[0].v
-					assert(v1.v[1].t >= 4)
-					assert(v1.v[1].t <= 12)
-					fl = v1.v[1].v
-
-					# Save the filename, offset, length
-					self.filenames.append(diskname)
-					self.fileoffsets.append(fo)
-					self.filelengths.append(fl)
-					self.filenameindex.append(ni)
-
+				# Add the object to our list
 				v.append(NameObject(ni, v1))
+
 			return TypeValue(t, v)
 
 		else:
@@ -614,13 +623,13 @@ class	PSB():
 			print(unpacker.peek16())
 
 	def	extractSubFiles(self, bin_data):
-		for i in range(0, len(self.filenames)):
-			fo = self.fileoffsets[i]
-			fl = self.filelengths[i]
+		for fi in self.fileinfo:
+			fo = fi.o
+			fl = fi.l
 			assert(fo <= len(bin_data))
 			assert((fo + fl) <= len(bin_data))
 
-			ni = self.filenameindex[i]
+			ni = fi.ni
 			ns = self.names[ni]
 
 			# Extract the data chunk

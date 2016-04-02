@@ -60,8 +60,8 @@ def	extract_psb(psb_filename):
 
 		if global_vars.options.files:
 			# Write out our subfiles
-			for i, fn in enumerate(mypsb.filenames):
-				filename = os.path.join(base_dir, fn)
+			for i, fi in enumerate(mypsb.fileinfo):
+				filename = os.path.join(base_dir, fi.dn)
 				if os.path.isfile(filename):
 					print("File '%s' exists, not over-writing" % filename)
 				else:
