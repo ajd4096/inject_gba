@@ -61,6 +61,7 @@ class	buffer_packer():
 	def __call__(self, fmt, data):
 		packed_data = struct.pack(fmt, data)
 		packed_length = len(packed_data)
+		self.setlength(self._offset + packed_length)
 		self._buffer[self._offset : self._offset + packed_length] = packed_data
 		self._offset += packed_length
 
@@ -68,9 +69,12 @@ class	buffer_packer():
 		return len(self._buffer)
 
 	def	seek(self, offset):
-		if len(self._buffer) < offset:
-			self._buffer = self._buffer + [0] * (offset - len(self._buffer) + 1)
+		self.setlength(offset)
 		self._offset = offset
+
+	def	setlength(self, length):
+		if len(self._buffer) < length:
+			self._buffer = self._buffer + [0] * (length - len(self._buffer))
 
 	def	tell(self):
 		return self._offset
