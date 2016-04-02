@@ -201,11 +201,15 @@ class	PSB():
 		# Encrypt/compress/concat our files
 
 		# Write out our dummy header
-		self.header.signature = b'PSB\x00'
+		self.header.signature	= b'PSB\x00'
+		self.header.type	= 2
 		self.header.pack(packer)
 
 		# Pack the array of names
-		#self.pack_names(unpacker)
+		self.pack_names(packer)
+
+		# Pack our tree of entries
+		self.pack_entries(packer)
 
 		# Pack the array of strings
 		self.pack_strings(packer)
@@ -213,17 +217,11 @@ class	PSB():
 		# Pack the array of chunks
 		self.pack_chunks(packer)
 
-		# Pack our tree of entries
-		#self.pack_entries(unpacker)
-
 		# Rewrite the header with the correct offsets
 		packer.seek(0)
 		self.header.pack(packer)
 
-		psb_data = bytearray(packer._buffer)
-		bin_data = bytearray([])
-
-		return psb_data, bin_data
+		return bytes(packer._buffer)
 
 	def	unpack(self, psb_data):
 		unpacker = buffer_unpacker(psb_data)
@@ -410,14 +408,14 @@ class	PSB():
 				packer('<%ds' % s, v.to_bytes(s, 'little'))
 		elif t >= 21 and t <= 24:
 			# index into 'strings' array (1-4 bytes)
-			s = getIntSize(v)
+			s = getIntSize(obj.v)
 			packer('<B', 20 + s)
-			packer('<%ds' % s, v.to_bytes(s, 'little'))
+			packer('<%ds' % s, obj.v.to_bytes(s, 'little'))
 		elif t >= 25 and t <= 28:
 			# index into 'chunks' array, 1-4 bytes
-			s = getIntSize(v)
+			s = getIntSize(obj.v)
 			packer('<B', 24 + s)
-			packer('<%ds' % s, v.to_bytes(s, 'little'))
+			packer('<%ds' % s, obj.v.to_bytes(s, 'little'))
 		elif t == 29:
 			# 0 byte float
 			packer('<B', t)
@@ -432,107 +430,80 @@ class	PSB():
 		elif t == 32:
 			# array of objects, written as array of offsets (int), array of objects
 			packer('<B', t)
-			# Get our list of objects
-			v = obj.v
-			# Build a list of offsets
-			list_of_offsets = []
-			list_of_objects	= []
-			next_offset = 0
-			for i in range(0, len(v)):
-				o = v[i]
+
+			# We need a list of offsets before the objects, so we have to pack each object into a temporary buffer to get the size
+			next_offset	= 0
+			temp_offsets	= []
+			temp_data	= []
+			for o in obj.v:
 				# Pack our object into a temporary buffer to get the size
-				tmp_packer = buffer_packer()
-				self.pack_object(tmp_packer, name + "|%d" % i, o)
+				temp_packer = buffer_packer()
+				self.pack_object(temp_packer, '', o)
+
 				# Remember our offset
-				list_of_offsets.append(next_offset)
-				# Remember our size for the next offset
-				next_offset += tmp_packer.length()
+				temp_offsets.append(next_offset)
+
+				# Advance the next offset
+				next_offset += temp_packer.length()
+
 				# Remember our object data
-				list_of_objects.append(bytes(tmp_packer._buffer))
+				temp_data.append(bytes(temp_packer._buffer))
+
 			# Pack the list of offsets
-			self.pack_object(packer, '', TypeValue(13, list_of_offsets))
+			self.pack_object(packer, '', TypeValue(13, temp_offsets))
+
 			# Pack the object data
-			for oi in range(0, len(list_of_objects)):
-				packer('<s', list_of_objects[oi])
+			for od in temp_data:
+				l = len(od)
+				packer('<%ds' % l, od)
 		elif t == 33:
 			# array of name/object pairs, written as array of name indexes, array of offsets, array of objects
 			packer('<B', t)
-			# Get our list of objects
-			v = obj.v
-			next_offset = 0
-			list_of_names   = []
-			list_of_offsets = []
-			list_of_objects	= []
-			for o in v:
-				obj_name_index = o.ni
-				obj_name = o.ns
-				obj_data = o.o
+
+			# If the type33 is a "file_info", we ignore the list in the tree and re-populate it from the PSB.fileinfo[]
+			if name == '|file_info':
+				print("Packing fileinfo struct (%d entries)" % len(self.fileinfo))
+				obj.v=[]
+				for fi in self.fileinfo:
+					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(4, fi.o), TypeValue(4, fi.l)])))
+
+			# We need a list of offsets before the objects, so we have to pack each object into a temporary buffer to get the size
+			next_offset	= 0
+			temp_names	= []
+			temp_offsets	= []
+			temp_data	= []
+			for no in obj.v:
+				if (type(no) != NameObject):
+					print("Expected NameObject, got %s" % type(no))
 				if global_vars.options.verbose:
-					print("<<< %s %s" % ('name', obj_name))
-				# If the type33 is a file_info, each member is a file
-				if name == '|file_info':
-					assert(type(obj_data) == FileInfo)
-					if global_vars.options.verbose:
-						print('<<<', obj_data)
-					# If we have a file, read it in and fix the offset/length before packing the object
-					if self.new_files:
-						print("Reading in '%s' for '%s'" % (obj_data.f, obj_name))
-						# Read in the raw data
-						fd = open(os.path.join(os.path.dirname(global_vars.options.basename), obj_data.f), 'rb').read()
-						print("Raw length %d 0x%X" % (len(fd), len(fd)))
-						# Compress the data
-						if '.jpg.m' in obj_name:
-							fd = compress_data(fd, 0)
-						else:
-							fd = compress_data(fd, 9)
-						print("Compressed length %d 0x%X" % (len(fd), len(fd)))
-						# Obfuscate the data using the filename for the seed
-						unobfuscate_data(fd, obj_name)
-						# Remember the unpadded length
-						new_length = len(fd)
-						# Pad the data to a multiple of 0x800 bytes
-						p = len(fd) % 0x800
-						if p:
-							fd += b'\x00' * (0x800 - p)
-						print("Padded length %d 0x%X" % (len(fd), len(fd)))
-						# Add the compressed/encrypted/padded data to our new_files array
-						self.new_files.append(fd)
-						# Fix up the offset/length
-						new_offset = 0
-						for i in range(0, len(self.new_files) -1):
-							new_offset += len(self.new_files[i])
+					print("<<< %s %s" % (name, self.names[no.ni]))
 
-						if new_offset != obj_data.o:
-							print("<<< '%s' -> '%s'" % (obj_data.f, obj_name))
-							print("<<< old offset %d 0x%X" % (obj_data.o, obj_data.o))
-							print("<<< new offset %d 0x%X" % (new_offset, new_offset))
-
-						if new_length != obj_data.l:
-							print("<<< '%s' -> '%s'" % (obj_data.f, obj_name))
-							print("<<< old length %d 0x%X" % (obj_data.l, obj_data.l))
-							print("<<< new length %d 0x%X" % (new_length, new_length))
-
-						obj_data = TypeValue(32, [TypeValue(4, new_offset), TypeValue(4, new_length)])
-					else:
-						obj_data = TypeValue(32, [TypeValue(4, obj_data.o), TypeValue(4, obj_data.l)])
 				# Pack our object into a temporary buffer to get the size
-				tmp_packer = buffer_packer()
-				self.pack_object(tmp_packer, name + "|%s" % obj_name, obj_data)
+				temp_packer = buffer_packer()
+				self.pack_object(temp_packer, name + "|%s" % self.names[no.ni], no.o)
+
 				# Remember our name index
-				list_of_names.append(obj_name_index)
+				temp_names.append(no.ni)
+
 				# Remember our offset
-				list_of_offsets.append(next_offset)
-				# Remember our size for the next offset
-				next_offset = tmp_packer.length()
+				temp_offsets.append(next_offset)
+
+				# Advance the next offset
+				next_offset += temp_packer.length()
+
 				# Remember our object data
-				list_of_objects.append(bytes(tmp_packer._buffer))
+				temp_data.append(bytes(temp_packer._buffer))
+
 			# Pack the list of names
-			self.pack_object(packer, '', TypeValue(13, list_of_names))
+			self.pack_object(packer, '', TypeValue(13, temp_names))
+
 			# Pack the list of offsets
-			self.pack_object(packer, '', TypeValue(13, list_of_offsets))
+			self.pack_object(packer, '', TypeValue(13, temp_offsets))
+
 			# Pack the object data
-			for oi in range(0, len(list_of_objects)):
-				packer('<s', list_of_objects[oi])
+			for od in temp_data:
+				l = len(od)
+				packer('<%ds' % l, od)
 		else:
 			print("Unknown type")
 			print(t)
@@ -772,9 +743,23 @@ class	PSB():
 				# Save the chunk filename
 				self.chunknames.append(self.getChunkFilename(i))
 
+	def	pack_entries(self, packer):
+		self.header.offset_entries = packer.tell()
+		self.pack_object(packer, '', self.entries)
+
 	def	unpack_entries(self, unpacker):
 		unpacker.seek(self.header.offset_entries)
 		self.entries = self.unpack_object(unpacker, '')
+
+	def	pack_names(self, packer):
+		# Encode the self.names array back into 3 arrays
+		nt = PSB_NameTable()
+		nt.build_tables(self.names)
+
+		self.header.offset_names		= packer.tell()
+		self.pack_object(packer, 'offsets', TypeValue(13, nt.offsets))
+		self.pack_object(packer, 'jumps',   TypeValue(13, nt.jumps))
+		self.pack_object(packer, 'starts',  TypeValue(13, nt.starts))
 
 	def	unpack_names(self, unpacker):
 
@@ -803,15 +788,15 @@ class	PSB():
 		for s in self.strings:
 			se = s.encode('utf-8')
 			l = len(se) +1	# +1 for the NUL byte
-			offsets.append(l)
+			offsets.append(offset)
 			offset += l
 
 		# Pack our offsets array object
-		self.header.offsets_strings		= packer.tell()
+		self.header.offset_strings		= packer.tell()
 		self.pack_object(packer, 'strings', TypeValue(13, offsets))
 
 		# Pack our data
-		self.header.offsets_strings_data	= packer.tell()
+		self.header.offset_strings_data	= packer.tell()
 		for s in self.strings:
 			se = s.encode('utf-8')
 			l = len(se) +1	# +1 for the NUL byte

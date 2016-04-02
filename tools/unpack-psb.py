@@ -75,6 +75,75 @@ def	extract_psb(psb_filename):
 			# Write out our chunks
 			mypsb.write_chunks(base_dir)
 
+def	repack_psb(yaml_filename):
+
+	if global_vars.options.verbose:
+		print("Reading file %s" % yaml_filename)
+
+	yaml_data = open(yaml_filename, 'rt').read()
+
+	mypsb = psb.PSB()
+	mypsb.load_yaml(yaml_data)
+
+	# Read in our chunk files
+	mypsb.read_chunks(os.path.dirname(yaml_filename))
+
+	# Read in our subfiles
+	# This will update the PSB.fileinfo[] entries with the new lengths etc
+	bin_data = mypsb.read_subfiles(os.path.dirname(yaml_filename))
+
+	# Pack our PSB object into the on-disk format
+	psb_data = mypsb.pack()
+
+	if global_vars.options.basename:
+		base_dir = os.path.dirname(global_vars.options.basename)
+
+		# Make sure the directory exists
+		if base_dir:
+			os.makedirs(base_dir, exist_ok = True)
+
+		# Write out the yaml file for debugging
+		if DEBUG:
+			filename = global_vars.options.basename + '.yaml'
+			if os.path.isfile(filename):
+				print("File '%s' exists, not over-writing" % filename)
+			else:
+				open(filename, 'wt').write(mypsb.print_yaml())
+
+		psb_filename = global_vars.options.basename + '.psb'
+
+		if DEBUG:
+			open(psb_filename + '.0', 'wb').write(psb_data)	# raw
+
+		# Compress the data
+		# FIXME - make this optional? some sub .psb files are not
+		psb_data = psb.compress_data(psb_data)
+
+		if DEBUG:
+			open(psb_filename + '.1', 'wb').write(psb_data)	# compressed
+
+		# Encrypt the data
+		if global_vars.options.key:
+			psb.unobfuscate_data(psb_data, global_vars.options.key)
+		else:
+			psb.unobfuscate_data(psb_data, os.path.basename(global_vars.options.basename + '.psb.m'))
+		if DEBUG:
+			open(psb_filename + '.2', 'wb').write(psb_data)	# compressed/encrypted
+
+		# Write out the compressed/encrypted data
+		filename = global_vars.options.basename + '.psb.m'
+		if os.path.isfile(filename):
+			print("File '%s' exists, not over-writing" % filename)
+		else:
+			open(filename, 'wb').write(psb_data)
+
+		# Write out the bin data
+		if bin_data:
+			filename = global_vars.options.basename + '.bin'
+			if os.path.isfile(filename):
+				print("File '%s' exists, not over-writing" % filename)
+			else:
+				open(filename, 'wb').write(bytes(bin_data))
 
 def	main():
 
@@ -93,6 +162,26 @@ This will read alldata.psb.m (and alldata.bin) and create output.yaml
 %prog -f -b output alldata.psb.m
 This will read alldata.psb.m (and alldata.bin) and create output.yaml with all sub-files in output_0000_filename etc
 
+%prog -b output2 -k mysecretkey output.yaml
+This will read output.yaml (and output_* files) and create output2.psb.m and output2.bin
+The file output2.psb.m will be encrypted with 'mysecretkey'
+-----
+To replace a rom:
+
+Extract the PSB:
+%prog -f -b workdir/output originaldir/alldata.psb.m
+This will create workdir if needed, and overwrite any workdir/output* files which exist.
+
+Replace workdir/output_NNNN_filename with your rom.
+The filename will vary, but it should be obvious.
+The yaml file contains the offset and length of the original rom, you do NOT need to edit this.
+
+Create a new PSB:
+%prog -b otherdir/alldata workdir/output.yaml
+This will create a new alldata.psb.m and alldata.bin in otherdir/
+The file otherdir/alldata.psb.m will be encrypted with 'alldata.psb.m'
+This will create otherdir if needed, but will not overwrite any otherdir/alldata* files which exist.
+
 """)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
@@ -109,6 +198,8 @@ This will read alldata.psb.m (and alldata.bin) and create output.yaml with all s
 			extract_psb(filename)
 		elif fnmatch.fnmatch(filename, '*.psb.m'):
 			extract_psb(filename)
+		elif fnmatch.fnmatch(filename, '*.yaml'):
+			repack_psb(filename)
 
 if __name__ == "__main__":
 	main()
