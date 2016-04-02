@@ -111,12 +111,18 @@ class	buffer_unpacker():
 	def	data(self):
 		return self._buffer[self._offset : ]
 
-	# For debugging, get the next output then reset the offset
+	# Get the next output without moving the offset
 	def	peek(self, fmt):
 		off = self.tell()
 		out = self(fmt)
 		self.seek(off)
 		return out
+
+	def	peek16(self):
+		r = min(16, (self.length() - self.tell()))
+		if r > 0:
+			return self.peek('<%dB' % r)
+		return "EOF"
 
 # mdf\0
 # PSB\0
@@ -458,9 +464,10 @@ class	PSB():
 			assert(False)
 
 	def	unpack_object(self, unpacker, name):
+		offset = unpacker.tell()
 		if global_vars.options.verbose:
 			print(">>> %s @0x%X" % (name, unpacker.tell()))
-			print(unpacker.peek('<16B'))
+			print(unpacker.peek16())
 		t = unpacker.peek('<B')[0]
 		if t >= 1 and t <= 3:
 			# from exm2lib & inspection, length = 0, purpose unknown
@@ -564,7 +571,7 @@ class	PSB():
 				o = offsets.v[i]
 				if global_vars.options.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
-					print(unpacker.peek('<16B'))
+					print(unpacker.peek16())
 
 				# Unpack the object at the offset
 				unpacker.seek(seek_base + o)
@@ -605,7 +612,7 @@ class	PSB():
 		else:
 			print(">>> %s @0x%X" % (name, offset))
 			print("Unknown type")
-			print(unpacker.peek('<16B'))
+			print(unpacker.peek16())
 
 	def	extractSubFiles(self, bin_data):
 		for i in range(0, len(self.filenames)):
