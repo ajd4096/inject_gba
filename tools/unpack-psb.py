@@ -19,7 +19,10 @@ def	extract_psb(psb_filename):
 	if DEBUG:
 		open(psb_filename + '.2', 'wb').write(psb_data)	# compressed/encrypted
 
-	psb.unobfuscate_data(psb_data, psb_filename)
+	if global_vars.options.key:
+		psb.unobfuscate_data(psb_data, global_vars.options.key)
+	else:
+		psb.unobfuscate_data(psb_data, psb_filename)
 	if DEBUG:
 		open(psb_filename + '.1', 'wb').write(psb_data)	# compressed
 
@@ -95,6 +98,7 @@ This will read alldata.psb.m (and alldata.bin) and create output.yaml with all s
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
 	parser.add_option('-b',	'--basename',	dest='basename',	help='write yaml to BASE.yaml',			metavar='BASE')
 	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to BASE_NNNN_filename',	action='store_true',	default=False)
+	parser.add_option('-k',	'--key',	dest='key',		help='encrypt BASE.psb.m using KEY',		metavar='KEY')
 	(global_vars.options, args) = parser.parse_args()
 
 	if not args:
