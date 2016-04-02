@@ -8,16 +8,24 @@ import	psb
 import	global_vars
 
 
+DEBUG=1
+
 def	extract_psb(psb_filename):
 
 	if global_vars.options.verbose:
 		print("Reading file %s" % psb_filename)
 
 	psb_data = bytearray(open(psb_filename, 'rb').read())
+	if DEBUG:
+		open(psb_filename + '.2', 'wb').write(psb_data)	# compressed/encrypted
 
 	psb.unobfuscate_data(psb_data, psb_filename)
+	if DEBUG:
+		open(psb_filename + '.1', 'wb').write(psb_data)	# compressed
 
 	psb_data = psb.uncompress_data(psb_data)
+	if DEBUG:
+		open(psb_filename + '.0', 'wb').write(psb_data)	# raw
 
 	header = psb.HDRLEN()
 	header.unpack(psb.buffer_unpacker(psb_data))
