@@ -232,7 +232,7 @@ class	PSB():
 
 		return psb_data, bin_data
 
-	def	unpack(self, psb_data, bin_data = None):
+	def	unpack(self, psb_data):
 		unpacker = buffer_unpacker(psb_data)
 
 		if global_vars.options.verbose:
@@ -262,10 +262,6 @@ class	PSB():
 		# Read in our tree of entries
 		self.unpack_entries(unpacker)
 
-		# Extract our subfiles
-		if (bin_data):
-			self.extractSubFiles(bin_data)
-
 	def	print_yaml(self):
 		# Create a top-level dict to dump
 		level0 = {
@@ -286,20 +282,105 @@ class	PSB():
 			self.chunknames		= level0['chunknames']
 			self.entries		= level0['entries']
 			self.fileinfo		= level0['fileinfo']
-			# Read in our subfiles
-			self.filedata = []
-			for fi in self.fileinfo:
+
+	# Read in our chunk files
+	def	read_chunks(self, base_dir):
+		self.chunkdata = []
+		for cn in self.chunknames:
+			filename = os.path.join(base_dir, cn)
+			if global_vars.options.verbose:
+				print("Reading chunk '%s'" % filename)
+			data = open(filename, 'rb').read()
+			self.chunkdata.append(data)
+
+	# Write out our chunk files
+	def	write_chunks(self, base_dir):
+		for i, fn in enumerate(self.chunknames):
+			filename = os.path.join(base_dir, fn)
+			if os.path.isfile(filename):
+				print("File '%s' exists, not over-writing" % filename)
+			else:
 				if global_vars.options.verbose:
-					print("Reading file '%s'" % fi.dn)
-				data = open(fi.dn, 'rb').read()
-				self.filedata.append(data)
-			# Read in our chunk files
-			self.chunkdata = []
-			for filename in self.chunknames:
+					print("Writing file %s" % filename)
+				open(filename, 'wb').write(self.chunkdata[i])
+
+	# Read in our subfiles and update the fileinfo[]
+	def	read_subfiles(self, base_dir):
+		bin_data	= []
+		for i, fi in enumerate(self.fileinfo):
+			if global_vars.options.verbose:
+				print("Reading in '%s'" % (fi.dn))
+
+			# Read in the raw data
+			fd = open(os.path.join(base_dir, fi.dn), 'rb').read()
+
+			if global_vars.options.verbose:
+				print("Raw length %d 0x%X" % (len(fd), len(fd)))
+
+			# Compress the data
+			if fi.dn.endswith('.m'):
+				if fi.dn.endswith('.jpg.m'):
+					fd = compress_data(fd, 0)
+				else:
+					fd = compress_data(fd, 9)
+
+			if global_vars.options.verbose:
+				print("Compressed length %d 0x%X" % (len(fd), len(fd)))
+
+			# Obfuscate the data using the original filename for the seed
+			unobfuscate_data(fd, self.names[fi.ni])
+
+			# Remember the unpadded length
+			new_length = len(fd)
+
+			if new_length != fi.l:
+				print("<<< old length %d 0x%X" % (fi.l, fi.l))
+				print("<<< new length %d 0x%X" % (new_length, new_length))
+
+			# Pad the data to a multiple of 0x800 bytes
+			p = len(fd) % 0x800
+			if p:
+				fd += b'\x00' * (0x800 - p)
+			if global_vars.options.verbose:
+				print("Padded length %d 0x%X" % (len(fd), len(fd)))
+
+			# Update the PSB's FileInfo with the new length, offset
+			self.fileinfo[i].o = len(bin_data)
+			self.fileinfo[i].l = new_length
+
+			# Save the compressed/encrypted/padded data
+			bin_data.extend(fd)
+
+		return bin_data
+
+	# Write out our subfiles
+	def	write_subfiles(self, base_dir, bin_data):
+		for i, fi in enumerate(self.fileinfo):
+			#print("%d %s" % (i, fi))
+			filename = os.path.join(base_dir, fi.dn)
+			if os.path.isfile(filename):
+				print("File '%s' exists, not over-writing" % filename)
+			else:
 				if global_vars.options.verbose:
-					print("Reading chunk '%s'" % filename)
-				data = open(filename, 'rb').read()
-				self.chunkdata.append(data)
+					print("Writing file %s" % filename)
+
+				# If it looks like our rom, output the filename
+				if 'system/roms' in self.names[fi.ni]:
+					print("ROM in '%s'" % filename)
+
+				# Get the chunk of data from the alldata.bin file
+				fd = bin_data[fi.o : fi.o + fi.l]
+				#open(filename + '.1', 'wb').write(fd)
+
+				# Unobfuscate the data using the original filename for the seed
+				unobfuscate_data(fd, self.names[fi.ni])
+				#open(filename + '.2', 'wb').write(fd)
+
+				# Uncompress the data
+				fd = uncompress_data(fd)
+
+				# Write out the subfile
+				open(filename, 'wb').write(fd)
 
 	#
 	# based on exm2lib get_number()

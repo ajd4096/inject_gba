@@ -13,17 +13,20 @@ def	extract_psb(psb_filename):
 	if global_vars.options.verbose:
 		print("Reading file %s" % psb_filename)
 
-	psb_file_data = bytearray(open(psb_filename, 'rb').read())
+	psb_data = bytearray(open(psb_filename, 'rb').read())
 
-	psb.unobfuscate_data(psb_file_data, psb_filename)
+	psb.unobfuscate_data(psb_data, psb_filename)
 
-	psb_file_data = psb.uncompress_data(psb_file_data)
+	psb_data = psb.uncompress_data(psb_data)
 
 	header = psb.HDRLEN()
-	header.unpack(psb.buffer_unpacker(psb_file_data))
+	header.unpack(psb.buffer_unpacker(psb_data))
 	if header.signature != b'PSB\x00':
 		print("PSB header not found")
 		return
+
+	mypsb = psb.PSB()
+	mypsb.unpack(psb_data)
 
 	# Get the base filename without any .psb.m
 	base_filename = psb_filename
@@ -33,17 +36,6 @@ def	extract_psb(psb_filename):
 	b, e = os.path.splitext(base_filename)
 	if (e == '.psb'):
 		base_filename = b
-
-	bin_filename  = base_filename + '.bin'
-	if os.path.isfile(bin_filename):
-		if global_vars.options.verbose:
-			print("Reading file %s" % bin_filename)
-		bin_file_data = bytearray(open(bin_filename, 'rb').read())
-	else:
-		bin_file_data = None
-
-	mypsb = psb.PSB()
-	mypsb.unpack(psb_file_data, bin_file_data)
 
 	if global_vars.options.basename:
 		# Make sure the directory exists
@@ -59,20 +51,18 @@ def	extract_psb(psb_filename):
 			open(filename, 'wt').write(mypsb.print_yaml())
 
 		if global_vars.options.files:
-			# Write out our subfiles
-			for i, fi in enumerate(mypsb.fileinfo):
-				filename = os.path.join(base_dir, fi.dn)
-				if os.path.isfile(filename):
-					print("File '%s' exists, not over-writing" % filename)
-				else:
-					open(filename, 'wb').write(mypsb.filedata[i])
+			# Read in the alldata.bin file if it exists
+			bin_filename  = base_filename + '.bin'
+			if os.path.isfile(bin_filename):
+				if global_vars.options.verbose:
+					print("Reading file %s" % bin_filename)
+				bin_data = bytearray(open(bin_filename, 'rb').read())
+
+				# Write out our subfiles
+				mypsb.write_subfiles(base_dir, bin_data)
+
 			# Write out our chunks
-			for i, fn in enumerate(mypsb.chunknames):
-				filename = os.path.join(base_dir, fn)
-				if os.path.isfile(filename):
-					print("File '%s' exists, not over-writing" % filename)
-				else:
-					open(filename, 'wb').write(mypsb.chunkdata[i])
+			mypsb.write_chunks(base_dir)
 
 
 def	main():
