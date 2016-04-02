@@ -29,12 +29,11 @@ class	TypeValue(yaml.YAMLObject):
 
 class	NameObject(yaml.YAMLObject):
 	yaml_tag = u'!NO'
-	def	__init__(self, ni, ns, o):
+	def	__init__(self, ni, o):
 		self.ni = ni	# index into names[]
-		self.ns = ns	# string from names[]
 		self.o = o	# object
 	def	__repr__(self):
-		return "%s(ni=%r, ns=%r, o=%r)" % (self.__class__.__name__, self.ni, self.ns, self.o)
+		return "%s(ni=%r, o=%r)" % (self.__class__.__name__, self.ni, self.o)
 
 class	FileInfo(yaml.YAMLObject):
 	yaml_tag = u'!FI'
@@ -606,7 +605,7 @@ class	PSB():
 					self.filelengths.append(fl)
 					self.filenameindex.append(ni)
 
-				v.append(NameObject(ni, ns, v1))
+				v.append(NameObject(ni, v1))
 			return TypeValue(t, v)
 
 		else:
