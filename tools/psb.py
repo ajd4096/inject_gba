@@ -810,41 +810,21 @@ class	PSB():
 		self.entries = self.unpack_object(unpacker, '')
 
 	def	unpack_names(self, unpacker):
-		self.names		= []
 
 		unpacker.seek(self.header.offset_names)
-		offsets	= self.unpack_object(unpacker, 'offsets')
-		tree	= self.unpack_object(unpacker, 'tree')
-		names	= self.unpack_object(unpacker, 'names')
 
-		if global_vars.options.verbose:
-			print("Parsing names arrays (%d)" % len(names.v))
+		nt = PSB_NameTable()
+		nt.offsets	= self.unpack_object(unpacker, 'offsets').v
+		nt.jumps	= self.unpack_object(unpacker, 'jumps').v
+		nt.starts	= self.unpack_object(unpacker, 'starts').v
 
-		for i in range(0, len(names.v)):
-			s = self.get_name(offsets, tree, names, i)
+		# Decode the 3 arrays into simple strings
+		self.names		= []
+		for i in range(0, len(nt.starts)):
+			s = nt.get_name(i)
 			self.names.append(s)
 			if global_vars.options.verbose:
 				print("Name %d %s" % (i, s))
-
-	# Copied from exm2lib
-	def	get_name(self, offsets, tree, names, index):
-		accum = ""
-
-		a = names.v[index];
-		b = tree.v[a];
-		c = 0
-		d = 0
-		e = 0
-		#print("%d %d %d %d %d %c" % (a, b, c, d, e, chr(e)))
-
-		while b != 0:
-			c = tree.v[b]
-			d = offsets.v[c]
-			e = b - d
-			#print("%d %d %d %d %d %c" % (a, b, c, d, e, chr(e)))
-			b = c
-			accum = chr(e) + accum
-		return accum
 
 	#
 	# Pack our strings[] array, and update our header with the offsets
@@ -1046,3 +1026,285 @@ def	uncompress_data(data):
 		# Return the data as-is
 		return data
 
+
+#
+# Observations:
+#
+# 1. The jumps can be forwards or backwards
+#
+# 2.  We constrain the position so the offset is always >= 1
+# This is not critical to the algorithm, but avoids size/sign issues when extracting.
+# (This is "e = b - d" below).
+#
+# 3. The same offset is applied to each branch which arrives at a given node.
+#
+# Because of (1) we can start searching for free locations from the start of the table each time.
+#
+# Because of (2) we must constrain our search for new table locations to more than the new character.
+#
+# Because of (3) the node's children must be stored with the same relative offsets.
+# If we encode these strings
+# A B C
+# A B D
+# A B F
+# The C,D,F can not be contiguous, they must be stored C,D,?,F
+# There is no requirement that the C,D,?,F are stored after A,B, only the relative spacing within one set of children is fixed
+#
+# The simple solution is to always add sets of children to the end of the table.
+# Possible optimizations:
+# Search the table for a gap large enough to hold the set.
+# Insert the sets ordered by decreasing set size.
+# Insert the sets ordered by decreasing min-max range.
+# In practice, these are not needed.
+
+
+# PSB_Node:
+# This describes a single character in our 'names' table
+class	PSB_Node:
+	def	__init__(self):
+		# These describe each character in our list of names
+		self.id		= 0	# Our index into the PSB_NodeTree.nodes list
+		self.p		= 0	# Our parent index into the PSB_NodeTree.nodes list
+		self.cn		= []	# Our children (index into the PSB_NodeTree.nodes list)
+		self.c		= 0	# This node's character
+		# These are used to build the PSB_NameTable tables:
+		self.ji		= 0	# This holds the index into the PSB_NameTable.jumps list
+	def	__repr__(self):
+		return "%s(id=%r, p=%r, cn=%r, c=%r)" % (self.__class__.__name__, self.id, self.p, self.cn, self.c)
+
+# PSB_NodeTree:
+class	PSB_NodeTree:
+	def	__init__(self):
+		self.nodes		= []	# List of PSB_Node objects
+		self.starting_nodes	= []	# list of indexes into self.nodes
+
+	def	reverse_walk(self, ni):
+		if ni == 0:
+			return ""
+		else:
+			c = self.nodes[ni].c
+			return self.reverse_walk(self.nodes[ni].p) + chr(c)
+
+	def	add_strings(self, names):
+
+		# Start with an an empty root node
+		self.nodes		= []
+		self.nodes.append(PSB_Node())
+
+		self.starting_nodes	= []
+
+		# For each string in our list...
+		#for name_idx, name_str in enumerate(sorted(names, key=len)):
+		for name_idx in range(len(names)):
+			name_str = names[name_idx]
+
+			# Start searching the node tree from the top
+			node_idx = 0
+
+			# For each char in our string
+			for c in name_str.encode('latin-1') + b'\x00':
+				# Check if we match any of our children
+				for child in self.nodes[node_idx].cn:
+					if self.nodes[child].c == c:
+						# Found match, use it
+						node_idx = child
+						break
+				else:
+					# Allocate a new node
+					self.nodes.append(PSB_Node())
+					next_idx = len(self.nodes)-1
+					self.nodes[next_idx].id = next_idx
+
+					# Set the new node's parent to us
+					self.nodes[next_idx].p = node_idx
+
+					# Add the new node to our list of children
+					self.nodes[node_idx].cn.append(next_idx)
+
+					# Set the new node to the new char
+					self.nodes[next_idx].c = c
+
+					# Point to the new node
+					node_idx = next_idx
+			else:
+				# This is the last node for this string
+				# Store the string# -> node
+				self.starting_nodes.append(node_idx)
+
+class	PSB_NameTable:
+	def	__init__(self):
+		self.jumps	= []
+		self.offsets	= []
+		self.starts	= []
+
+	def	get_name(self, index):
+
+		# Get the starting position
+		a = self.starts[index]
+
+		# Follow one jump to skip the terminating NUL
+		# (Not critical to the walking algorithm)
+		b = self.jumps[a]
+
+		DEBUG_SEEN	= 1
+
+		if DEBUG_SEEN:
+			seen = [0] * len(self.jumps)
+
+		accum = ""
+
+		while b != 0:
+			# Get our parent jump index
+			c = self.jumps[b]
+
+			# Get the offset from our parent
+			d = self.offsets[c]
+
+			# Get our char. (our jump index - parent's offset)
+			e = b - d
+
+			# Sanity check our character
+			if e < 1:
+				print("b: %d " % b, end="")
+				print("c: %d " % c, end="")
+				print("d: %d " % d, end="")
+				print("e: %d " % e, end="")
+				print("")
+
+			# Check for loops in the jump table
+			if DEBUG_SEEN:
+				seen[b] = 1
+				if seen[c]:
+					print("Loop detected in jump table:")
+					print("b: %d " % b, end="")
+					print("c: %d " % c, end="")
+					print("d: %d " % d, end="")
+					print("e: %d " % e, end="")
+					print("")
+					return accum
+
+			# Prepend our char to our string
+			accum = chr(e) + accum
+
+			# Move to our parent
+			b = c
+
+		return accum
+
+	def	build_tables(self, names):
+		self.jumps	= []
+		self.offsets	= []
+		self.starts	= []
+
+		node_tree = PSB_NodeTree()
+		node_tree.add_strings(names)
+
+		self.build_jumps(node_tree)
+		self.build_offsets(node_tree)
+		self.build_starts(node_tree)
+
+
+	def	build_jumps(self, node_tree):
+		for ni in range(len(node_tree.nodes)):
+			# Skip the root node
+			if ni:
+				# We may have already processed this node (but not our children) when processing our parent.
+				# If we have not already processed this node, find a position for it
+				if node_tree.nodes[ni].ji == 0:
+					# Constrain the index so the index-char offset >= 1
+					min_ji = node_tree.nodes[ni].c + 1
+
+					# Extend the table if needed
+					if len(self.jumps) <= min_ji:
+						self.jumps.extend([None] * (min_ji - len(self.jumps) +1))
+
+					# Find the first unused jump entry
+					for ji in range(min_ji, len(self.jumps)):
+						if self.jumps[ji] is None:
+							break
+					else:
+						# We didn't find one, extend the table
+						# Set our jump index to the next unused entry
+						ji = len(self.jumps)
+						# Extend the table by 1
+						self.jumps.extend([None] * 1)
+
+					# Save our node's jump index
+					node_tree.nodes[ni].ji = ji
+					# Set our jump value to our parent's jump index
+					p = node_tree.nodes[ni].p
+					pji = node_tree.nodes[p].ji
+					self.jumps[ji] = pji
+
+			# If we have >1 children, add space for the range of chars
+			# We could search for a gap, but it would be very unlikely.
+			cn_count = len(node_tree.nodes[ni].cn)
+			if cn_count > 1:
+				# Get the min, max of our children's characters
+				c_min = min(node_tree.nodes[ci].c for ci in node_tree.nodes[ni].cn)
+				c_max = max(node_tree.nodes[ci].c for ci in node_tree.nodes[ni].cn)
+
+				# Get the index of the first child
+				ji_first = len(self.jumps)
+
+				# Constrain the index so the index-char offset >= 1
+				if ji_first < (c_min +1):
+					ji_first = c_min +1
+
+				# Get the index of the last child
+				ji_last = ji_first - c_min + c_max
+
+				# Extend the jump table
+				self.jumps.extend([None] * (ji_last - len(self.jumps) +1))
+
+				# For each child...
+				for ci in node_tree.nodes[ni].cn:
+					# Set our child node's jump index
+					ji_child = ji_first - c_min + node_tree.nodes[ci].c
+					node_tree.nodes[ci].ji = ji_child
+					# Set our child's jump target to ourselves
+					self.jumps[ji_child] = node_tree.nodes[ni].ji
+
+		# Fix any remaining None entries
+		for ji in range(len(self.jumps)):
+			if self.jumps[ji] is None:
+				self.jumps[ji] = 0
+
+	# Fill in the offsets table
+	def	build_offsets(self, node_tree):
+
+		# Start with a list of 0s
+		self.offsets	= [0] * len(self.jumps)
+		for ni in range(1, len(node_tree.nodes)):
+
+			# Calculate our offset (jump index - character)
+			o = node_tree.nodes[ni].ji - node_tree.nodes[ni].c
+
+			# Sanity check this meets our >=1
+			assert(o >= 1)
+
+			# Get our parent
+			p	= node_tree.nodes[ni].p
+
+			# Get our parent's jump index
+			pji	= node_tree.nodes[p].ji
+			assert(pji >= 0)
+			assert(pji < len(self.offsets))
+
+			# Record the offset in our parent
+			self.offsets[pji] = o
+
+	# Fill in the starts table
+	def	build_starts(self, node_tree):
+
+		# Start with an empty list
+		self.starts	= []
+
+		# For each starting node in the node tree
+		for si in node_tree.starting_nodes:
+
+			# Get the jump index from the starting node
+			ji = node_tree.nodes[si].ji
+
+			# Add it to our list
+			self.starts.append(ji)
