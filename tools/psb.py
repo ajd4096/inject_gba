@@ -973,6 +973,12 @@ class	PSB():
 
 		self.raw_names = unpacker._buffer[self.header.offset_names : unpacker.tell()]
 
+		if 1:
+			nt2 = PSB_NameTable()
+			nt2.build_tables(self.names)
+			nt.build_debug_tree("NT1")
+			nt2.build_debug_tree("NT2")
+
 	#
 	# Pack our strings[] array, and update our header with the offsets
 	#
@@ -1292,6 +1298,20 @@ class	PSB_NameTable:
 		self.jumps	= []
 		self.offsets	= []
 		self.starts	= []
+		self.debug_tree	= None
+
+	def	build_debug_tree(self, prefix):
+		self.debug_tree	= [None] * len(self.jumps)
+		for si in range(len(self.starts)):
+			self.get_name(si)
+		for ji in range(len(self.jumps)):
+			print(prefix, end=" ")
+			if not self.debug_tree[ji]:
+				print("-")
+			else:
+				if self.debug_tree[ji].p +1 == ji:
+					print("+ ", end="")
+				print(self.debug_tree[ji])
 
 	def	get_name(self, index):
 
@@ -1301,6 +1321,7 @@ class	PSB_NameTable:
 		# Follow one jump to skip the terminating NUL
 		# (Not critical to the walking algorithm)
 		b = self.jumps[a]
+		b = a
 
 		DEBUG_SEEN	= 1
 
@@ -1320,7 +1341,7 @@ class	PSB_NameTable:
 			e = b - d
 
 			# Sanity check our character
-			if e < 1:
+			if e < 0:
 				print("b: %d " % b, end="")
 				print("c: %d " % c, end="")
 				print("d: %d " % d, end="")
@@ -1341,6 +1362,20 @@ class	PSB_NameTable:
 
 			# Prepend our char to our string
 			accum = chr(e) + accum
+
+			# If we are building a debug tree, fill in our node and our parent's node
+			if self.debug_tree:
+				if self.debug_tree[b] == None:
+					self.debug_tree[b] = PSB_Node();
+					self.debug_tree[b].id = b
+				self.debug_tree[b].p = c
+				self.debug_tree[b].c = e
+
+				if self.debug_tree[c] == None:
+					self.debug_tree[c] = PSB_Node();
+					self.debug_tree[c].id = c
+				if not b in self.debug_tree[c].cn:
+					self.debug_tree[c].cn.append(b)
 
 			# Move to our parent
 			b = c
@@ -1437,6 +1472,11 @@ class	PSB_NameTable:
 			o = node_tree.nodes[ni].ji - node_tree.nodes[ni].c
 
 			# Sanity check this meets our >=1
+			if o < 1:
+				print("ni: %d " % ni, end="")
+				print("o: %d " % o, end="")
+				print("len(self.jumps): %d " % len(self.jumps), end="")
+				print("")
 			assert(o >= 1)
 
 			# Get our parent
