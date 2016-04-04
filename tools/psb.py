@@ -14,6 +14,8 @@ import	zlib
 
 import	global_vars
 
+DEBUG_FILE_COMPRESSION=0
+
 #
 # Define our object classes
 #
@@ -183,12 +185,23 @@ class	PSB():
 	def	__init__(self):
 		self.header		= PSB_HDR()
 
+		# Raw copy of each of the sections.
+		# If we do not modify anything we can paste these into the output file.
+		self.raw_names			= None
+		self.raw_entries		= None
+		self.raw_strings_offsets	= None
+		self.raw_strings_data		= None
+		self.raw_chunk_offsets		= None
+		self.raw_chunk_lengths		= None
+		self.raw_chunk_data		= None
+
 		self.names		= []	# list of strings indexed by NameObject.ni
 		self.strings		= [] 	# list of strings index by Type 21-24
 		self.chunkdata		= []	# raw data indexed by Type 25-28
 		self.chunknames		= []	# CNNNN filenames for each chunk
 		self.entries		= None
 		self.fileinfo		= []	# Stash of FileInfo objects (easier than walking the entries tree)
+		self.subfile_data	= None	# Copy of each subfile from ADB in encrypted/compressed form
 
 	def	__str__(self):
 		o = "PSB:\n"
@@ -209,8 +222,6 @@ class	PSB():
 
 	def	pack(self):
 		packer = buffer_packer()
-
-		# Encrypt/compress/concat our files
 
 		# Write out our dummy header
 		self.header.signature	= b'PSB\x00'
@@ -268,6 +279,13 @@ class	PSB():
 	def	print_yaml(self):
 		# Create a top-level dict to dump
 		level0 = {
+			'raw_names':		self.raw_names,
+			'raw_entries':		self.raw_entries,
+			'raw_strings_offsets':	self.raw_strings_offsets,
+			'raw_strings_data':	self.raw_strings_data,
+			'raw_chunk_offsets':	self.raw_chunk_offsets,
+			'raw_chunk_lengths':	self.raw_chunk_lengths,
+			'raw_chunk_data':	self.raw_chunk_data,
 			'names':	self.names,
 			'strings':	self.strings,
 			'chunknames':	self.chunknames,
@@ -280,6 +298,14 @@ class	PSB():
 		# FIXME - use yaml.safe_load
 		level0 = yaml.load(data)
 		if isinstance(level0, dict):
+			self.raw_names			= level0['raw_names']
+			self.raw_entries		= level0['raw_entries']
+			self.raw_strings_offsets	= level0['raw_strings_offsets']
+			self.raw_strings_data		= level0['raw_strings_data']
+			self.raw_chunk_offsets		= level0['raw_chunk_offsets']
+			self.raw_chunk_lengths		= level0['raw_chunk_lengths']
+			self.raw_chunk_data		= level0['raw_chunk_data']
+
 			self.names		= level0['names']
 			self.strings		= level0['strings']
 			self.chunknames		= level0['chunknames']
@@ -307,83 +333,185 @@ class	PSB():
 					print("Writing file %s" % filename)
 				open(filename, 'wb').write(self.chunkdata[i])
 
-	# Read in our subfiles and update the fileinfo[]
-	def	read_subfiles(self, base_dir):
+	# Update our FileInfo offset/lengths
+	def	update_fileinfo(self):
+		assert(len(self.subfile_data) == len(self.fileinfo))
+		offset = 0
+		for i, fi in enumerate(self.fileinfo):
+
+			# Get the length of the subfile_data entry
+			new_length = len(self.subfile_data[i])
+
+			# If we are longer, we need to rewrite the entries section to record the larger size
+			# If we are more than 0x800 bytes smaller, we need to rewrite the entries section to fix the offsets of each following entry
+			if new_length > fi.l or (new_length + 0x800) < fi.l:
+				if global_vars.options.verbose:
+					print("File '%s' length differs, re-writing entries table" % self.names[fi.ni])
+					print("Old length %d 0x%X" % (fi.l, fi.l))
+					print("New length %d 0x%X" % (new_length, new_length))
+				# Clear the cached entries block
+				self.raw_entries = None
+
+			# If our offset has changed, we need to rewrite the entries section
+			if offset != fi.o:
+				# Don't warn about this, they could all be different
+				# Clear the cached entries block
+				self.raw_entries = None
+
+			# Update the PSB's FileInfo with the new length, offset
+			# The FileInfo holds the unpadded length
+			self.fileinfo[i].o = offset
+			self.fileinfo[i].l = new_length
+
+			# Round the length to a multiple of 0x800 bytes to simulate the padding
+			if new_length % 0x800:
+				new_length += 0x800 - (new_length % 0x800)
+
+			# Advance our running offset by the padded length
+			offset += new_length
+
+	# Join our subfile data array into a single alldata.bin array
+	def	join_subfiles(self):
+
+		self.update_fileinfo()
+
 		bin_data	= []
 		for i, fi in enumerate(self.fileinfo):
-			if global_vars.options.verbose:
-				print("Reading in '%s'" % (fi.dn))
 
-			# Read in the raw data
-			fd = open(os.path.join(base_dir, fi.dn), 'rb').read()
+			# Take a copy of the data (so we don't pad the entry in subfile_data)
+			fd = self.subfile_data[i][:]
 
-			if global_vars.options.verbose:
-				print("Raw length %d 0x%X" % (len(fd), len(fd)))
-
-			# Compress the data
-			if fi.dn.endswith('.m'):
-				if fi.dn.endswith('.jpg.m'):
-					fd = compress_data(fd, 0)
-				else:
-					fd = compress_data(fd, 9)
-
-			if global_vars.options.verbose:
-				print("Compressed length %d 0x%X" % (len(fd), len(fd)))
-
-			# Obfuscate the data using the original filename for the seed
-			unobfuscate_data(fd, self.names[fi.ni])
-
-			# Remember the unpadded length
+			# Get the unpadded length
 			new_length = len(fd)
 
-			if new_length != fi.l:
-				print("<<< old length %d 0x%X" % (fi.l, fi.l))
-				print("<<< new length %d 0x%X" % (new_length, new_length))
-
 			# Pad the data to a multiple of 0x800 bytes
-			p = len(fd) % 0x800
-			if p:
-				fd += b'\x00' * (0x800 - p)
+			if new_length % 0x800:
+				fd += b'\x00' * (0x800 - new_length % 0x800)
 			if global_vars.options.verbose:
 				print("Padded length %d 0x%X" % (len(fd), len(fd)))
 
-			# Update the PSB's FileInfo with the new length, offset
-			self.fileinfo[i].o = len(bin_data)
-			self.fileinfo[i].l = new_length
-
-			# Save the compressed/encrypted/padded data
+			# Add the self.subfile to the ADB array
 			bin_data.extend(fd)
 
 		return bin_data
 
-	# Write out our subfiles
-	def	write_subfiles(self, base_dir, bin_data):
+	# Read in all our subfiles into a subfile_data array.
+	# The data is compressed/encrypted
+	def	read_all_subfiles(self, base_dir):
+		self.subfile_data	= [None] * len(self.fileinfo)
+		for i in range(len(self.fileinfo)):
+			self.read_subfile(base_dir, i)
+
+	# Read in a single subfile and return the data
+	# The data is compressed/encrypted
+	def	read_subfile(self, base_dir, i):
+		fi = self.fileinfo[i]
+		if not global_vars.options.quiet:
+			print("Reading '%s'" % (fi.dn))
+
+		# Read in the raw data
+		fd = open(os.path.join(base_dir, fi.dn), 'rb').read()
+		#print("Len %d" % len(fd))
+
+		# Compress/Encrypt and save the data.
+		self.replace_subfile(i, fd)
+
+	# Compress/Encrypt and save the given data for a single subfile.
+	def	replace_subfile(self, i, fd0):
+		fi = self.fileinfo[i]
+
+		if global_vars.options.verbose:
+			print("Raw length %d 0x%X" % (len(fd0), len(fd0)))
+
+		# We save sub-psb files as-is
+		if fi.dn.endswith('.psb') or fi.dn.endswith('.psb.m'):
+			fd2 = fd0[:]
+		else:
+			# Compress the data
+			if fi.dn.endswith('.jpg.m'):
+				# JPEG files are stored with minimal compression
+				fd1 = compress_data(fd0, 0)
+			else:
+				fd1 = compress_data(fd0, 9)
+
+			# Obfuscate the data using the original filename for the seed
+			fd2 = unobfuscate_data(fd1, self.names[fi.ni])
+
+		if global_vars.options.verbose:
+			print("Compressed length %d 0x%X" % (len(fd2), len(fd2)))
+
+		# Save the compressed/encrypted data in our subfile array
+		self.subfile_data[i] = fd2
+
+		# Check the length here.
+		# If we are longer, we need to rewrite the entries section to record the larger size.
+		# If we are more than 0x800 bytes smaller, we need to rewrite the entries section to fix the offsets of each following entry
+		new_length = len(fd2)
+		if new_length > fi.l or (new_length + 0x800) < fi.l:
+			if not global_vars.options.quiet:
+				print("File '%s' length differs, re-writing entries table" % self.names[fi.ni])
+				print("Old length %d 0x%X" % (fi.l, fi.l))
+				print("New length %d 0x%X" % (new_length, new_length))
+			# Clear the cached entries block
+			self.raw_entries = None
+
+
+	# Split our subfiles
+	# This splits the alldata.bin data into each sub-file
+	# The data is left encrypted/compressed form to save time
+	def	split_subfiles(self, bin_data):
+		self.subfile_data = []
 		for i, fi in enumerate(self.fileinfo):
 			#print("%d %s" % (i, fi))
+			if global_vars.options.verbose:
+				print("Extracting file %s" % self.names[fi.ni])
+
+			# Get the chunk of data from the alldata.bin file
+			fd = bin_data[fi.o : fi.o + fi.l]
+
+			# Add the chunk to our array
+			self.subfile_data.append(fd)
+
+	# Write out all our subfiles to their disk files.
+	# The file data is unencrypted/uncompressed.
+	def	write_all_subfiles(self, base_dir):
+		assert(len(self.subfile_data) == len(self.fileinfo))
+		for i in range(len(self.fileinfo)):
+			fi = self.fileinfo[i]
 			filename = os.path.join(base_dir, fi.dn)
-			if os.path.isfile(filename):
-				print("File '%s' exists, not over-writing" % filename)
-			else:
-				if global_vars.options.verbose:
-					print("Writing file %s" % filename)
+			self.write_subfile(i, filename)
 
-				# If it looks like our rom, output the filename
-				if 'system/roms' in self.names[fi.ni]:
-					print("ROM in '%s'" % filename)
+	# Write out a single subfile to it's disk file.
+	# The file data is unencrypted/uncompressed.
+	def	write_subfile(self, i, filename):
+		if os.path.isfile(filename):
+			print("File '%s' exists, not over-writing" % filename)
+			return
 
-				# Get the chunk of data from the alldata.bin file
-				fd = bin_data[fi.o : fi.o + fi.l]
-				#open(filename + '.1', 'wb').write(fd)
+		fi = self.fileinfo[i]
+		if global_vars.options.verbose:
+			print("Writing '%s'" % filename)
 
-				# Unobfuscate the data using the original filename for the seed
-				unobfuscate_data(fd, self.names[fi.ni])
-				#open(filename + '.2', 'wb').write(fd)
+		# Get a copy of the encrypted/compressed data from our array
+		fd2 = self.subfile_data[i][:]
+		if DEBUG_FILE_COMPRESSION:
+			open(filename + '.2', 'wb').write(fd2)
 
-				# Uncompress the data
-				fd = uncompress_data(fd)
+		# Compress the data
+		if fi.dn.endswith('.psb') or fi.dn.endswith('.psb.m'):
+			# Write out sub-psb files as-is
+			fd0 = fd2
+		else:
+			# Unobfuscate the data using the original filename for the seed
+			fd1 = unobfuscate_data(fd2, self.names[fi.ni])
+			if DEBUG_FILE_COMPRESSION:
+				open(filename + '.1', 'wb').write(fd1)
 
-				# Write out the subfile
-				open(filename, 'wb').write(fd)
+			# Uncompress the data
+			fd0 = uncompress_data(fd1)
+
+		# Write out the subfile
+		open(filename, 'wb').write(fd0)
 
 	#
 	# based on exm2lib get_number()
@@ -487,6 +615,9 @@ class	PSB():
 			# If the type33 is a "file_info", we ignore the list in the tree and re-populate it from the PSB.fileinfo[]
 			if name == '|file_info':
 				print("Packing fileinfo struct (%d entries)" % len(self.fileinfo))
+				# Make sure our offset/lengths are current
+				self.update_fileinfo()
+
 				obj.v=[]
 				for fi in self.fileinfo:
 					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(100, fi.o), TypeValue(100, fi.l)])))
@@ -536,6 +667,7 @@ class	PSB():
 	def	unpack_object(self, unpacker, name):
 		offset = unpacker.tell()
 		if global_vars.options.verbose:
+			print("")
 			print(">>> %s @0x%X" % (name, unpacker.tell()))
 			print(unpacker.peek16())
 		t = unpacker.peek('<B')[0]
@@ -634,38 +766,6 @@ class	PSB():
 			assert(len(names.v) == len(offsets.v))
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X (%d entries)" % (name, offset, len(names.v)))
-			if name == '|file_info':
-				# If we are a file_info list, each object is a type 32 collection containing the offset & length values of the file data in alldata.bin
-				# We build a list of FileInfo objects in the PSB, and ignore the list in the tree.
-				v = []
-				for i, ni in enumerate(names.v):
-					ns = self.names[ni]
-					o = offsets.v[i]
-					if global_vars.options.verbose:
-						print(">>> %s|%s @0x%X entry %d:" % (name, ns, offset, i))
-						print(unpacker.peek16())
-
-					# Unpack the object at the offset
-					unpacker.seek(seek_base + o)
-					v1 = self.unpack_object(unpacker, name + "|%s" % ns)
-
-					# Sanity check our object
-					assert(v1.t == 32)
-					assert(len(v1.v) == 2)
-					assert(v1.v[0].t >= 4)
-					assert(v1.v[0].t <= 12)
-					assert(v1.v[1].t >= 4)
-					assert(v1.v[1].t <= 12)
-
-					# Build the name of our sub-file
-					diskname = self.getFilename(i) + "_" + os.path.basename(ns)
-
-					# Get the offset and length
-					fo = v1.v[0].v
-					fl = v1.v[1].v
-
-					# Save the FileInfo in our stash, but not to our entries tree list
-					self.fileinfo.append(FileInfo(ni, diskname, fl, fo))
 
 			# For each entry in the name list...
 			v = []
@@ -683,6 +783,28 @@ class	PSB():
 
 				# Add the object to our list
 				v.append(NameObject(ni, v1))
+
+				# If we are a file_info list, each object is a type 32 collection containing the offset & length values of the file data in alldata.bin
+				# We build a list of FileInfo objects in the PSB for easy access, then mostly ignore the list in the tree.
+				if name == '|file_info':
+
+					# Sanity check our object
+					assert(v1.t == 32)
+					assert(len(v1.v) == 2)
+					assert(v1.v[0].t >= 4)
+					assert(v1.v[0].t <= 12)
+					assert(v1.v[1].t >= 4)
+					assert(v1.v[1].t <= 12)
+
+					# Build the name of our sub-file
+					diskname = self.getFilename(i) + "_" + os.path.basename(ns)
+
+					# Get the offset and length
+					fo = v1.v[0].v
+					fl = v1.v[1].v
+
+					# Save the FileInfo in our stash
+					self.fileinfo.append(FileInfo(ni, diskname, fl, fo))
 
 			return TypeValue(t, v)
 
@@ -720,16 +842,25 @@ class	PSB():
 
 		# Pack our offsets array
 		self.header.offset_chunk_offsets	= packer.tell()
-		self.pack_object(packer, 'chunk_offsets', TypeValue(13, offsets))
+		if self.raw_chunk_offsets:
+			packer('<%ds' % len(self.raw_chunk_offsets), bytes(self.raw_chunk_offsets))
+		else:
+			self.pack_object(packer, 'chunk_offsets', TypeValue(13, offsets))
 
 		# Pack our lengths array
 		self.header.offset_chunk_lengths	= packer.tell()
-		self.pack_object(packer, 'chunk_lengths', TypeValue(13, lengths))
+		if self.raw_chunk_lengths:
+			packer('<%ds' % len(self.raw_chunk_lengths), bytes(self.raw_chunk_lengths))
+		else:
+			self.pack_object(packer, 'chunk_lengths', TypeValue(13, lengths))
 
 		# Pack our data
 		self.header.offset_chunk_data		= packer.tell()
-		for i in range(0, len(self.chunkdata)):
-			packer('<%ds' % len(self.chunks[i]), self.chunkdata[i])
+		if self.raw_chunk_data:
+			packer('<%ds' % len(self.raw_chunk_data), bytes(self.raw_chunk_data))
+		else:
+			for i in range(0, len(self.chunkdata)):
+				packer('<%ds' % len(self.chunks[i]), self.chunkdata[i])
 		
 	def	unpack_chunks(self, unpacker):
 		self.chunkdata		= []
@@ -741,6 +872,7 @@ class	PSB():
 			print("Chunk offsets count %d" % len(chunk_offsets.v))
 			for i in range(0, len(chunk_offsets.v)):
 				print("Chunk offset %d = %d 0x%X" % (i, chunk_offsets.v[i], chunk_offsets.v[i]))
+		self.raw_chunk_offsets = unpacker._buffer[self.header.offset_chunk_offsets : unpacker.tell()]
 
 
 		# Read in our chunk lengths array (this may be empty)
@@ -750,10 +882,12 @@ class	PSB():
 			print("Chunk lengths count %d" % len(chunk_lengths.v))
 			for i in range(0, len(chunk_lengths.v)):
 				print("Chunk length %d = %d 0x%X" % (i, chunk_lengths.v[i], chunk_lengths.v[i]))
+		self.raw_chunk_lengths = unpacker._buffer[self.header.offset_chunk_lengths : unpacker.tell()]
 
 		assert(len(chunk_offsets.v) == len(chunk_lengths.v))
 
 		# If we have chunk data, split it out
+		unpacker.seek(self.header.offset_chunk_data)
 		if len(chunk_offsets.v) > 0 and self.header.offset_chunk_data < len(unpacker.data()):
 			for i in range(0, len(chunk_offsets.v)):
 				o = chunk_offsets.v[i]
@@ -766,24 +900,34 @@ class	PSB():
 
 				# Save the chunk filename
 				self.chunknames.append(self.getChunkFilename(i))
+		self.raw_chunk_data = unpacker._buffer[self.header.offset_chunk_data : unpacker.tell()]
 
 	def	pack_entries(self, packer):
-		self.header.offset_entries = packer.tell()
-		self.pack_object(packer, '', self.entries)
+		if self.raw_entries:
+			self.header.offset_entries		= packer.tell()
+			packer('<%ds' % len(self.raw_entries), bytes(self.raw_entries))
+		else:
+			self.header.offset_entries = packer.tell()
+			self.pack_object(packer, '', self.entries)
 
 	def	unpack_entries(self, unpacker):
 		unpacker.seek(self.header.offset_entries)
 		self.entries = self.unpack_object(unpacker, '')
+		self.raw_entries = unpacker._buffer[self.header.offset_entries : unpacker.tell()]
 
 	def	pack_names(self, packer):
-		# Encode the self.names array back into 3 arrays
-		nt = PSB_NameTable()
-		nt.build_tables(self.names)
+		if self.raw_names:
+			self.header.offset_names		= packer.tell()
+			packer('<%ds' % len(self.raw_names), bytes(self.raw_names))
+		else:
+			# Encode the self.names array back into 3 arrays
+			nt = PSB_NameTable()
+			nt.build_tables(self.names)
 
-		self.header.offset_names		= packer.tell()
-		self.pack_object(packer, 'offsets', TypeValue(13, nt.offsets))
-		self.pack_object(packer, 'jumps',   TypeValue(13, nt.jumps))
-		self.pack_object(packer, 'starts',  TypeValue(13, nt.starts))
+			self.header.offset_names		= packer.tell()
+			self.pack_object(packer, 'offsets', TypeValue(13, nt.offsets))
+			self.pack_object(packer, 'jumps',   TypeValue(13, nt.jumps))
+			self.pack_object(packer, 'starts',  TypeValue(13, nt.starts))
 
 	def	unpack_names(self, unpacker):
 
@@ -802,6 +946,8 @@ class	PSB():
 			if global_vars.options.verbose:
 				print("Name %d %s" % (i, s))
 
+		self.raw_names = unpacker._buffer[self.header.offset_names : unpacker.tell()]
+
 	#
 	# Pack our strings[] array, and update our header with the offsets
 	#
@@ -817,20 +963,27 @@ class	PSB():
 
 		# Pack our offsets array object
 		self.header.offset_strings		= packer.tell()
-		self.pack_object(packer, 'strings', TypeValue(13, offsets))
+		if self.raw_strings_offsets:
+			packer('<%ds' % len(self.raw_strings_offsets), bytes(self.raw_strings_offsets))
+		else:
+			self.pack_object(packer, 'strings', TypeValue(13, offsets))
 
 		# Pack our data
 		self.header.offset_strings_data	= packer.tell()
-		for s in self.strings:
-			se = s.encode('utf-8')
-			l = len(se) +1	# +1 for the NUL byte
-			packer('<%ds' % l, se)
+		if self.raw_strings_data:
+			packer('<%ds' % len(self.raw_strings_data), bytes(self.raw_strings_data))
+		else:
+			for s in self.strings:
+				se = s.encode('utf-8')
+				l = len(se) +1	# +1 for the NUL byte
+				packer('<%ds' % l, se)
 
 	def	unpack_strings(self, unpacker):
 		self.strings	= []
 
 		unpacker.seek(self.header.offset_strings)
 		strings_array	= self.unpack_object(unpacker, 'strings')
+		self.raw_strings_offsets = unpacker._buffer[self.header.offset_strings : unpacker.tell()]
 
 		if global_vars.options.verbose:
 			print("Parsing strings array (%d)" % len(strings_array.v))
@@ -843,6 +996,7 @@ class	PSB():
 			self.strings.append(s)
 			if global_vars.options.verbose:
 				print("String %d  @0x%X %s" % (i, o, s))
+		self.raw_strings_data = unpacker._buffer[self.header.offset_strings_data : unpacker.tell()]
 
 class	PSB_HDR():
 	def	__init__(self):
@@ -935,9 +1089,11 @@ def	get_xor_key(filename):
 
 #
 # Unobfuscate the data
-# This modifies the data in-place
+# This returns a copy of the unobfuscated data and leaves the original untouched.
 #
-def	unobfuscate_data(data, filename):
+def	unobfuscate_data(original_data, filename):
+	data = original_data[:]
+
 	header = HDRLEN()
 	header.unpack(buffer_unpacker(data))
 
@@ -952,6 +1108,8 @@ def	unobfuscate_data(data, filename):
 		key_len = len(key_buffer)
 		for i in range(len(data) - header.offset1):
 			data[i + header.offset1] ^= key_buffer[i % key_len]
+
+	return data
 
 #
 # Compress the data and prepend a mdf header
