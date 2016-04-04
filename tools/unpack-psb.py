@@ -204,33 +204,43 @@ def	main():
 		def format_epilog(self, formatter):
 			return self.expand_prog_name(self.epilog)
 
-	parser = MyParser(usage='Usage: %prog [options] <psb filename>', epilog=
+	parser = MyParser(usage='Usage: %prog [options] <filename>', epilog=
 """
+-----
+To insert a rom:
+
+%prog -r /path/to/new.rom -b workdir/alldata originaldir/alldata.psb.m
+
+This will:
+* Read in originaldir/alldata{.psb.m, .bin}
+* Replace the original rom with /path/to/new.rom
+* Create workdir/alldata{.psb.m, .bin, .rom}
+* The original rom is stored in workdir/alldata.rom
 -----
 Examples:
 
 %prog -b output alldata.psb.m
-This will read alldata.psb.m (and alldata.bin) and create output{.psb.m, .bin, .yaml}
+This will:
+
+* Read alldata.psb.m (and alldata.bin)
+* Create output{.psb.m, .bin, .rom}
+* The original rom is stored in output.rom
+
 
 %prog -f -b output alldata.psb.m
-This will read alldata.psb.m (and alldata.bin) and create output{.psb.m, .bin, .yaml} with all sub-files in output_0000_filename etc
-
-%prog -b output2 -k mysecretkey output.yaml
-This will read output.yaml (and output_* files) and create output2{.psb.m, .bin, .yaml}
-The file output2.psb.m will be encrypted with 'mysecretkey'
------
-To replace a rom:
-
-%prog -r /path/to/rom -b workdir/alldata originaldir/alldata.psb.m
 
 This will:
-1. Read in originaldir/alldata{.psb.m,.bin}
+* Read alldata.psb.m (and alldata.bin)
+* Create output{.psb.m, .bin, .rom}
+* Create output.yaml + output_NNNN_* files
 
-2. Replace the rom with /path/to/rom
 
-3. Create workdir if needed.
+%prog -b output2 -k mysecretkey output.yaml
 
-4. Write out workdir/alldata{.psb.m, .bin}
+This will:
+* Read output.yaml (and output_* files)
+* Create output2{.psb.m, .bin, .rom}
+The file output2.psb.m will be encrypted with 'mysecretkey'
 
 """)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
