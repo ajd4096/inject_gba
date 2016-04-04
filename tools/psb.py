@@ -1391,6 +1391,7 @@ class	PSB_NameTable:
 		node_tree.add_strings(names)
 
 		self.build_jumps(node_tree)
+		#self.build_jumps2(node_tree)
 		self.build_offsets(node_tree)
 		self.build_starts(node_tree)
 
@@ -1456,6 +1457,66 @@ class	PSB_NameTable:
 					# Set our child's jump target to ourselves
 					self.jumps[ji_child] = node_tree.nodes[ni].ji
 
+		# Fix any remaining None entries
+		for ji in range(len(self.jumps)):
+			if self.jumps[ji] is None:
+				self.jumps[ji] = 0
+
+	def	build_jumps2(self, node_tree):
+		self.jumps = [None]# * len(node_tree.nodes)
+		for ni in range(len(node_tree.nodes)):
+			if node_tree.nodes[ni].ji == 0:
+				# Find a space for ourselves
+				for offset in range(1, len(self.jumps)):
+					o = offset + node_tree.nodes[ni].c
+					# Make sure the table is long enough
+					if len(self.jumps) <= o:
+						self.jumps.extend([None] * (o - len(self.jumps) +1))
+					# If this entry is empty, we can use it.
+					if self.jumps[o] is None:
+						node_tree.nodes[ni].ji = o
+						pi = node_tree.nodes[ni].p
+						self.jumps[o] = node_tree.nodes[pi].ji
+						# Quit the offset search loop
+						break
+			# Find a space for our children
+			for offset in range(1, len(self.jumps)):
+				# For each child we have...
+				for ci in node_tree.nodes[ni].cn:
+					o = offset + node_tree.nodes[ci].c
+					# Make sure the table is long enough
+					if len(self.jumps) <= o:
+						self.jumps.extend([None] * (o - len(self.jumps) +1))
+					# If this entry is used, quit the child loop and try the next offset
+					#print(ni, offset, o, len(self.jumps))
+					if self.jumps[o] is not None:
+						break
+				else:
+					# We have found a set of unused slots!
+					# For each child...
+					for ci in node_tree.nodes[ni].cn:
+						o = offset + node_tree.nodes[ci].c
+						# Make sure the table is long enough
+						assert(len(self.jumps) > o)
+						# Set our child node's jump index
+						node_tree.nodes[ci].ji = o
+						# Set our child's jump target to our jump index
+						self.jumps[o] = node_tree.nodes[ni].ji
+					# Quit the offset search loop
+					break
+			else:
+				# We got to the end of the jumps table without finding a free slot - extend the table
+				offset = len(self.jumps)
+				# For each child...
+				for ci in node_tree.nodes[ni].cn:
+					o = offset + node_tree.nodes[ci].c
+					# Make sure the table is long enough
+					if len(self.jumps) <= o:
+						self.jumps.extend([None] * (o - len(self.jumps) +1))
+					# Set our child node's jump index
+					node_tree.nodes[ci].ji = o
+					# Set our child's jump target to our jump index
+					self.jumps[o] = node_tree.nodes[ni].ji
 		# Fix any remaining None entries
 		for ji in range(len(self.jumps)):
 			if self.jumps[ji] is None:
