@@ -325,6 +325,8 @@ class	PSB():
 
 	# Write out our chunk files
 	def	write_chunks(self, base_dir):
+		# Make sure the output directory exists
+		os.makedirs(base_dir, exist_ok = True)
 		for i, fn in enumerate(self.chunknames):
 			filename = os.path.join(base_dir, fn)
 			if os.path.isfile(filename):
@@ -332,6 +334,7 @@ class	PSB():
 			else:
 				if global_vars.options.verbose:
 					print("Writing file %s" % filename)
+				# Write out the chunk data
 				open(filename, 'wb').write(self.chunkdata[i])
 
 	# Update our FileInfo offset/lengths
@@ -822,7 +825,7 @@ class	PSB():
 					assert(v1.v[1].t <= 12)
 
 					# Build the name of our sub-file
-					diskname = self.getFilename(i) + "_" + os.path.basename(ns)
+					diskname = ns
 
 					# Get the offset and length
 					fo = v1.v[0].v
@@ -840,10 +843,7 @@ class	PSB():
 
 	# Get the chunk filename
 	def	getChunkFilename(self, chunk_index):
-		if global_vars.options.basename:
-			name = "%s_C%4.4d" % (os.path.basename(global_vars.options.basename), chunk_index)
-		else:
-			name = "%s_C%4.4d" % ('BASE', chunk_index)
+		name = "C%4.4d" % chunk_index
 		return name
 		
 	# Get the sub-file filename

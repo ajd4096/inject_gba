@@ -28,7 +28,7 @@ def	load_from_psb(psb_filename):
 
 	if psb_filename.endswith('.psb'):
 		# ".psb" files are not compressed, use the decrypted data
-		psb_data0 = psb_data
+		psb_data0 = psb_data2
 	else:
 		# Uncompress the psb data
 		psb_data0 = psb.uncompress_data(psb_data1)
@@ -109,7 +109,7 @@ def	write_yaml(mypsb):
 
 # Write out our PSB
 def	write_psb(mypsb):
-	filename = global_vars.options.basename + '.psb.m'
+	filename = global_vars.options.output
 
 	if os.path.isfile(filename):
 		print("File '%s' exists, not over-writing" % filename)
@@ -120,26 +120,29 @@ def	write_psb(mypsb):
 
 	# Pack our PSB object into the on-disk format
 	psb_data0 = mypsb.pack()
-
 	if DEBUG:
 		open(filename + '.0', 'wb').write(psb_data0)	# raw
 
-	# Compress the PSB data
-	# FIXME - make this optional? some sub .psb files are not
-	psb_data1 = psb.compress_data(psb_data0)
-	if DEBUG:
-		open(filename + '.1', 'wb').write(psb_data1)	# compressed
+	if filename.endswith('.psb'):
+		# Write out the data as-is
+		open(filename, 'wb').write(psb_data0)
 
-	# Encrypt the PSB data
-	if global_vars.options.key:
-		psb_data2 = psb.unobfuscate_data(psb_data1, global_vars.options.key)
-	else:
-		psb_data2 = psb.unobfuscate_data(psb_data1, filename)
-	if DEBUG:
-		open(filename + '.2', 'wb').write(psb_data2)	# compressed/encrypted
+	elif filename.endswith('.psb.m'):
+		# Compress the PSB data
+		psb_data1 = psb.compress_data(psb_data0)
+		if DEBUG:
+			open(filename + '.1', 'wb').write(psb_data1)	# compressed
 
-	# Write out the compressed/encrypted PSB data
-	open(filename, 'wb').write(psb_data2)
+		# Encrypt the PSB data
+		if global_vars.options.key:
+			psb_data2 = psb.unobfuscate_data(psb_data1, global_vars.options.key)
+		else:
+			psb_data2 = psb.unobfuscate_data(psb_data1, filename)
+		if DEBUG:
+			open(filename + '.2', 'wb').write(psb_data2)	# compressed/encrypted
+
+		# Write out the compressed/encrypted PSB data
+		open(filename, 'wb').write(psb_data2)
 
 # Write out our rom file
 def	write_rom_file(mypsb):
@@ -158,7 +161,7 @@ def	write_subfiles(mypsb):
 	if not global_vars.options.quiet:
 		print("Writing subfiles")
 
-	base_dir = os.path.dirname(global_vars.options.basename)
+	base_dir = global_vars.options.basename + '.files'
 	mypsb.write_all_subfiles(base_dir)
 
 # Write out our chunks
@@ -166,7 +169,7 @@ def	write_chunks(mypsb):
 	if not global_vars.options.quiet:
 		print("Writing chunk files")
 
-	base_dir = os.path.dirname(global_vars.options.basename)
+	base_dir = global_vars.options.basename + '.chunks'
 	mypsb.write_chunks(base_dir)
 
 # Write out the ADB
