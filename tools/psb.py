@@ -1019,6 +1019,7 @@ class	PSB_HDR():
 	def	__init__(self):
 		self.signature			= []
 		self.type			= 0
+		# In some (all?) sub PSBs, unknown1 has the same value as offset_names
 		self.unknown1			= 0
 		self.offset_names		= 0
 		self.offset_strings		= 0
