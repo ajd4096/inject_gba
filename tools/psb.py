@@ -373,6 +373,8 @@ class	PSB():
 
 	# Join our subfile data array into a single alldata.bin array
 	def	join_subfiles(self):
+		if not self.fileinfo:
+			return
 
 		self.update_fileinfo()
 
@@ -492,6 +494,9 @@ class	PSB():
 	# Write out all our subfiles to their disk files.
 	# The file data is unencrypted/uncompressed.
 	def	write_all_subfiles(self, base_dir):
+		if not self.fileinfo:
+			return
+
 		assert(len(self.subfile_data) == len(self.fileinfo))
 		for i in range(len(self.fileinfo)):
 			fi = self.fileinfo[i]
@@ -508,6 +513,9 @@ class	PSB():
 		fi = self.fileinfo[i]
 		if global_vars.options.verbose:
 			print("Writing '%s'" % filename)
+	
+		# Make sure the output directory exists
+		os.makedirs(os.path.dirname(filename), exist_ok = True)
 
 		# Get a copy of the encrypted/compressed data from our array
 		fd2 = self.subfile_data[i][:]
