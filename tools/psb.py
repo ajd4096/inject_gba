@@ -416,6 +416,14 @@ class	PSB():
 		# Compress/Encrypt and save the data.
 		self.replace_subfile(i, fd)
 
+	# Replace the subfile_data entry for the first 'system/roms' file with the given rom data
+	def	replace_rom_file(self, fd):
+		for i, fi in enumerate(self.fileinfo):
+			if 'system/roms' in self.names[fi.ni]:
+				print("Replacing '%s'" % self.names[fi.ni])
+				self.replace_subfile(i, fd)
+				break
+
 	# Compress/Encrypt and save the given data for a single subfile.
 	def	replace_subfile(self, i, fd0):
 		fi = self.fileinfo[i]
@@ -471,6 +479,14 @@ class	PSB():
 
 			# Add the chunk to our array
 			self.subfile_data.append(fd)
+
+	# Extract the subfile_data entry for the first 'system/roms' file.
+	# The file data is unencrypted/uncompressed.
+	def	write_rom_file(self, filename):
+		for i, fi in enumerate(self.fileinfo):
+			if 'system/roms' in self.names[fi.ni]:
+				self.write_subfile(i, filename)
+				break
 
 	# Write out all our subfiles to their disk files.
 	# The file data is unencrypted/uncompressed.
