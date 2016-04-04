@@ -128,6 +128,13 @@ class	buffer_unpacker():
 			return self.peek('<%dB' % r)
 		return "EOF"
 
+	def	get_cstr(self):
+		for next0 in range(self._offset, len(self._buffer)):
+			if self._buffer[next0] == 0:
+				s = self._buffer[self._offset : next0]
+				self._offset = next0 + 1
+				return s.decode('utf-8')
+
 # mdf\0
 # PSB\0
 class	HDRLEN():
@@ -815,14 +822,10 @@ class	PSB():
 			o = strings_array.v[i]
 			# Create a python string from the NUL-terminated C-string at offset
 			unpacker.seek(self.header.offset_strings_data + o)
-			d = unpacker.data();
-			for j in range(0, len(d)):
-				if d[j] == 0:
-					s = d[:j].decode('utf-8')
-					self.strings.append(s)
-					if global_vars.options.verbose:
-						print("String %d  @0x%X %s" % (i, o, s))
-					break
+			s = unpacker.get_cstr();
+			self.strings.append(s)
+			if global_vars.options.verbose:
+				print("String %d  @0x%X %s" % (i, o, s))
 
 class	PSB_HDR():
 	def	__init__(self):
