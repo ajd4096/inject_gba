@@ -47,13 +47,14 @@ def	load_from_psb(psb_filename):
 	mypsb.unpack(psb_data0)
 
 	# Get the base filename without any .psb.m
-	base_filename = psb_filename
-	b, e = os.path.splitext(base_filename)
-	if (e == '.m'):
-		base_filename = b
-	b, e = os.path.splitext(base_filename)
-	if (e == '.psb'):
-		base_filename = b
+	# '.psb.m' isn't a single extension :(
+	if psb_filename.endswith('.psb'):
+		base_filename = psb_filename[:-len('.psb')]
+	elif psb_filename.endswith('.psb.m'):
+		base_filename = psb_filename[:-len('.psb.m')]
+	else:
+		return
+
 
 	# Read in the alldata.bin file if it exists
 	bin_filename  = base_filename + '.bin'
@@ -209,7 +210,7 @@ def	main():
 -----
 To insert a rom:
 
-%prog -r /path/to/new.rom -b workdir/alldata originaldir/alldata.psb.m
+%prog -r /path/to/new.rom -o workdir/alldata.psb.m originaldir/alldata.psb.m
 
 This will:
 * Read in originaldir/alldata{.psb.m, .bin}
@@ -219,7 +220,7 @@ This will:
 -----
 Examples:
 
-%prog -b output alldata.psb.m
+%prog -o output.psb.m alldata.psb.m
 This will:
 
 * Read alldata.psb.m (and alldata.bin)
@@ -227,7 +228,7 @@ This will:
 * The original rom is stored in output.rom
 
 
-%prog -f -b output alldata.psb.m
+%prog -f -o output.psb.m alldata.psb.m
 
 This will:
 * Read alldata.psb.m (and alldata.bin)
@@ -235,7 +236,7 @@ This will:
 * Create output.yaml + output_NNNN_* files
 
 
-%prog -b output2 -k mysecretkey output.yaml
+%prog -o output2.psb.m -k mysecretkey output.yaml
 
 This will:
 * Read output.yaml (and output_* files)
@@ -245,14 +246,23 @@ The file output2.psb.m will be encrypted with 'mysecretkey'
 """)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
-	parser.add_option('-b',	'--basename',	dest='basename',	help='write yaml to BASE.yaml',			metavar='BASE')
 	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to BASE_NNNN_filename',	action='store_true',	default=False)
 	parser.add_option('-k',	'--key',	dest='key',		help='encrypt BASE.psb.m using KEY',		metavar='KEY')
+	parser.add_option('-o',	'--output',	dest='output',		help='write new psb to OUTPUT',			metavar='OUTPUT')
 	parser.add_option('-r',	'--rom',	dest='rom',		help='replace the rom file with ROM',		metavar='ROM')
 	(global_vars.options, args) = parser.parse_args()
 
 	if not args:
 		parser.print_help()
+
+	# Remove the extension from the output filename
+	if global_vars.options.output:
+		filename = global_vars.options.output
+		# '.psb.m' isn't a single extension :(
+		if filename.endswith('.psb'):
+			global_vars.options.basename = filename[:-len('.psb')]
+		elif filename.endswith('.psb.m'):
+			global_vars.options.basename = filename[:-len('.psb.m')]
 
 	for filename in args:
 		if filename.endswith('.psb') or filename.endswith('.psb.m'):
