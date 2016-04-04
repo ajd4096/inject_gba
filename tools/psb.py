@@ -648,7 +648,7 @@ class	PSB():
 
 				obj.v=[]
 				for fi in self.fileinfo:
-					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(100, fi.o), TypeValue(100, fi.l)], self.names[fi.ni])))
+					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(100, fi.o), TypeValue(100, fi.l)]), self.names[fi.ni]))
 
 			# We need a list of offsets before the objects, so we have to pack each object into a temporary buffer to get the size
 			next_offset	= 0
