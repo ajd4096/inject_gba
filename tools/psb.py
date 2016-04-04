@@ -53,6 +53,11 @@ def	getIntSize(v):
 		if v < (1 << (8 * s)):
 			return s
 
+def	getUnsignedIntSize(v):
+	for s in range(1, 8):
+		if v < (1 << (8 * s -1)):
+			return s
+
 class	buffer_packer():
 	def __init__(self):
 		self._buffer = []
@@ -396,6 +401,18 @@ class	PSB():
 				s = getIntSize(v)
 				packer('<B', 4 + s)
 				packer('<%ds' % s, v.to_bytes(s, 'little'))
+		elif t == 100:
+			# Internal only.
+			# unsigned int, 0-8 bytes
+			# We make sure the most significant bit is not set.
+			# Used when repacking the file_info offset, length fields
+			v = obj.v
+			if v == 0:
+				packer('<B', 4)
+			else:
+				s = getUnsignedIntSize(v)
+				packer('<B', 4 + s)
+				packer('<%ds' % s, v.to_bytes(s, 'little'))
 		elif t >= 13 and t <= 20:
 			# array of ints, packed as size of count, count, size of entries, entries[]
 			count = len(obj.v)
@@ -472,7 +489,7 @@ class	PSB():
 				print("Packing fileinfo struct (%d entries)" % len(self.fileinfo))
 				obj.v=[]
 				for fi in self.fileinfo:
-					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(4, fi.o), TypeValue(4, fi.l)])))
+					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(100, fi.o), TypeValue(100, fi.l)])))
 
 			# We need a list of offsets before the objects, so we have to pack each object into a temporary buffer to get the size
 			next_offset	= 0
