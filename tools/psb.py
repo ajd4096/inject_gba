@@ -31,11 +31,12 @@ class	TypeValue(yaml.YAMLObject):
 
 class	NameObject(yaml.YAMLObject):
 	yaml_tag = u'!NO'
-	def	__init__(self, ni, o):
+	def	__init__(self, ni, o, ns=None):
 		self.ni = ni	# index into names[]
-		self.o = o	# object
+		self.o  = o	# object
+		self.ns = ns	# For debugging, the name string from names[]
 	def	__repr__(self):
-		return "%s(ni=%r, o=%r)" % (self.__class__.__name__, self.ni, self.o)
+		return "%s(ni=%r, o=%r, ns=%r)" % (self.__class__.__name__, self.ni, self.o, self.ns)
 
 class	FileInfo(yaml.YAMLObject):
 	yaml_tag = u'!FI'
@@ -636,7 +637,7 @@ class	PSB():
 
 				obj.v=[]
 				for fi in self.fileinfo:
-					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(100, fi.o), TypeValue(100, fi.l)])))
+					obj.v.append(NameObject(fi.ni, TypeValue(32, [TypeValue(100, fi.o), TypeValue(100, fi.l)], self.names[fi.ni])))
 
 			# We need a list of offsets before the objects, so we have to pack each object into a temporary buffer to get the size
 			next_offset	= 0
@@ -798,7 +799,7 @@ class	PSB():
 				v1 = self.unpack_object(unpacker, name + "|%s" % ns)
 
 				# Add the object to our list
-				v.append(NameObject(ni, v1))
+				v.append(NameObject(ni, v1, self.names[ni]))
 
 				# If we are a file_info list, each object is a type 32 collection containing the offset & length values of the file data in alldata.bin
 				# We build a list of FileInfo objects in the PSB for easy access, then mostly ignore the list in the tree.
