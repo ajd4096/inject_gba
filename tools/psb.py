@@ -971,7 +971,7 @@ class	PSB():
 		# Decode the 3 arrays into simple strings
 		self.names		= []
 		for i in range(0, len(nt.starts)):
-			s = nt.get_name(i)
+			s = nt.get_name(i).rstrip('\0')
 			self.names.append(s)
 			if global_vars.options.verbose:
 				print("Name %d %s" % (i, s))
