@@ -40,13 +40,12 @@ class	NameObject(yaml.YAMLObject):
 
 class	FileInfo(yaml.YAMLObject):
 	yaml_tag = u'!FI'
-	def	__init__(self, ni, dn, l, o,):
+	def	__init__(self, ni, l, o,):
 		self.ni	= ni	# index into names[]
-		self.dn	= dn	# diskname in BASE+NNNN form
 		self.l	= l	# original length
 		self.o	= o	# original offset
 	def	__repr__(self):
-		return "%s(ni=%r, dn=%r l=%r, o=%r)" % (self.__class__.__name__, self.ni, self.dn, self.l, self.o)
+		return "%s(ni=%r, l=%r, o=%r)" % (self.__class__.__name__, self.ni, self.l, self.o)
 
 #
 # get the size of an int in bytes
@@ -413,10 +412,10 @@ class	PSB():
 	def	read_subfile(self, base_dir, i):
 		fi = self.fileinfo[i]
 		if not global_vars.options.quiet:
-			print("Reading '%s'" % (fi.dn))
+			print("Reading '%s'" % (self.names[fi.ni]))
 
 		# Read in the raw data
-		fd = open(os.path.join(base_dir, fi.dn), 'rb').read()
+		fd = open(os.path.join(base_dir, self.names[fi.ni]), 'rb').read()
 		#print("Len %d" % len(fd))
 
 		# Compress/Encrypt and save the data.
@@ -438,11 +437,11 @@ class	PSB():
 			print("Raw length %d 0x%X" % (len(fd0), len(fd0)))
 
 		# We save sub-psb files as-is
-		if fi.dn.endswith('.psb') or fi.dn.endswith('.psb.m'):
+		if self.names[fi.ni].endswith('.psb') or self.names[fi.ni].endswith('.psb.m'):
 			fd2 = fd0[:]
 		else:
 			# Compress the data
-			if fi.dn.endswith('.jpg.m'):
+			if self.names[fi.ni].endswith('.jpg.m'):
 				# JPEG files are stored with minimal compression
 				fd1 = compress_data(fd0, 0)
 			else:
@@ -503,7 +502,7 @@ class	PSB():
 		assert(len(self.subfile_data) == len(self.fileinfo))
 		for i in range(len(self.fileinfo)):
 			fi = self.fileinfo[i]
-			filename = os.path.join(base_dir, fi.dn)
+			filename = os.path.join(base_dir, self.names[fi.ni])
 			self.write_subfile(i, filename)
 
 	# Write out a single subfile to it's disk file.
@@ -526,7 +525,7 @@ class	PSB():
 			open(filename + '.2', 'wb').write(fd2)
 
 		# Compress the data
-		if fi.dn.endswith('.psb') or fi.dn.endswith('.psb.m'):
+		if self.names[fi.ni].endswith('.psb') or self.names[fi.ni].endswith('.psb.m'):
 			# Write out sub-psb files as-is
 			fd0 = fd2
 		else:
@@ -824,15 +823,12 @@ class	PSB():
 					assert(v1.v[1].t >= 4)
 					assert(v1.v[1].t <= 12)
 
-					# Build the name of our sub-file
-					diskname = ns
-
 					# Get the offset and length
 					fo = v1.v[0].v
 					fl = v1.v[1].v
 
 					# Save the FileInfo in our stash
-					self.fileinfo.append(FileInfo(ni, diskname, fl, fo))
+					self.fileinfo.append(FileInfo(ni, fl, fo))
 
 			return TypeValue(t, v)
 
