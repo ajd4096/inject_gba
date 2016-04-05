@@ -890,7 +890,7 @@ class	PSB():
 			packer('<%ds' % len(self.raw_chunk_data), bytes(self.raw_chunk_data))
 		else:
 			for i in range(0, len(self.chunkdata)):
-				packer('<%ds' % len(self.chunks[i]), self.chunkdata[i])
+				packer('<%ds' % len(self.chunkdata[i]), self.chunkdata[i])
 		
 	def	unpack_chunks(self, unpacker):
 		self.chunkdata		= []
