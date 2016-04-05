@@ -38,6 +38,15 @@ class	NameObject(yaml.YAMLObject):
 	def	__repr__(self):
 		return "%s(ni=%r, o=%r, ns=%r)" % (self.__class__.__name__, self.ni, self.o, self.ns)
 
+class	String(yaml.YAMLObject):
+	yaml_tag = u'!STR'
+	def	__init__(self, t, v, s=None):
+		self.t = t
+		self.v = v	# index into strings[]
+		self.s = s	# For debugging, the string
+	def	__repr__(self):
+		return "%s(t=%r, v=%r, s=%r)" % (self.__class__.__name__, self.t, self.v, self.s)
+
 class	FileInfo(yaml.YAMLObject):
 	yaml_tag = u'!FI'
 	def	__init__(self, ni, l, o,):
@@ -737,7 +746,7 @@ class	PSB():
 			if global_vars.options.verbose:
 				print(">>> %s @0x%X type %d value string %d" % (name, offset, t, v))
 			assert(v <= len(self.strings))
-			return TypeValue(t, v)
+			return String(t, v, self.strings[v])
 		elif t >= 25 and t <= 28:
 			# index into chunks array, 1-4 bytes
 			t = unpacker('<B')[0]
