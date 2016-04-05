@@ -8,8 +8,6 @@ import	psb
 import	global_vars
 
 
-DEBUG=0
-
 def	load_from_psb(psb_filename):
 
 	if not global_vars.options.quiet:
@@ -23,7 +21,7 @@ def	load_from_psb(psb_filename):
 		psb_data1 = psb.unobfuscate_data(psb_data2, global_vars.options.key)
 	else:
 		psb_data1 = psb.unobfuscate_data(psb_data2, psb_filename)
-	if DEBUG:
+	if global_vars.options.debug:
 		open(psb_filename + '.1', 'wb').write(psb_data1)	# compressed
 
 	if psb_filename.endswith('.psb'):
@@ -32,7 +30,7 @@ def	load_from_psb(psb_filename):
 	else:
 		# Uncompress the psb data
 		psb_data0 = psb.uncompress_data(psb_data1)
-		if DEBUG:
+		if global_vars.options.debug:
 			open(psb_filename + '.0', 'wb').write(psb_data0)	# raw
 
 	# Check we have a PSB header
@@ -59,7 +57,7 @@ def	load_from_psb(psb_filename):
 	# Read in the alldata.bin file if it exists
 	bin_filename  = base_filename + '.bin'
 	if os.path.isfile(bin_filename):
-		if global_vars.options.verbose:
+		if not global_vars.options.quiet:
 			print("Reading file %s" % bin_filename)
 		bin_data = bytearray(open(bin_filename, 'rb').read())
 
@@ -120,7 +118,7 @@ def	write_psb(mypsb):
 
 	# Pack our PSB object into the on-disk format
 	psb_data0 = mypsb.pack()
-	if DEBUG:
+	if global_vars.options.debug:
 		open(filename + '.0', 'wb').write(psb_data0)	# raw
 
 	if filename.endswith('.psb'):
@@ -130,7 +128,7 @@ def	write_psb(mypsb):
 	elif filename.endswith('.psb.m'):
 		# Compress the PSB data
 		psb_data1 = psb.compress_data(psb_data0)
-		if DEBUG:
+		if global_vars.options.debug:
 			open(filename + '.1', 'wb').write(psb_data1)	# compressed
 
 		# Encrypt the PSB data
@@ -138,7 +136,7 @@ def	write_psb(mypsb):
 			psb_data2 = psb.unobfuscate_data(psb_data1, global_vars.options.key)
 		else:
 			psb_data2 = psb.unobfuscate_data(psb_data1, filename)
-		if DEBUG:
+		if global_vars.options.debug:
 			open(filename + '.2', 'wb').write(psb_data2)	# compressed/encrypted
 
 		# Write out the compressed/encrypted PSB data
@@ -146,6 +144,9 @@ def	write_psb(mypsb):
 
 # Write out our rom file
 def	write_rom_file(mypsb):
+	if not mypsb.fileinfo:
+		return
+
 	filename = global_vars.options.basename + '.rom'
 	if os.path.isfile(filename):
 		print("File '%s' exists, not over-writing" % filename)
@@ -158,6 +159,9 @@ def	write_rom_file(mypsb):
 
 # Write out our subfiles
 def	write_subfiles(mypsb):
+	if not mypsb.fileinfo:
+		return
+
 	if not global_vars.options.quiet:
 		print("Writing subfiles")
 
@@ -249,8 +253,10 @@ The file output2.psb.m will be encrypted with 'mysecretkey'
 """)
 	parser.add_option('-q',	'--quiet',	dest='quiet',		help='quiet output',				action='store_true',	default=False)
 	parser.add_option('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='store_true',	default=False)
-	parser.add_option('-f',	'--files',	dest='files',		help='write subfiles to BASE_NNNN_filename',	action='store_true',	default=False)
-	parser.add_option('-k',	'--key',	dest='key',		help='encrypt BASE.psb.m using KEY',		metavar='KEY')
+	parser.add_option('-d',	'--debug',	dest='debug',		help='debugging output',			action='store_true',	default=False)
+	parser.add_option('-f',	'--files',	dest='files',		help='write output.files/*',			action='store_true',	default=False)
+	parser.add_option('-y',	'--yaml',	dest='yaml',		help='write output.yaml',			action='store_true',	default=False)
+	parser.add_option('-k',	'--key',	dest='key',		help='encrypt output.psb.m using KEY',		metavar='KEY')
 	parser.add_option('-o',	'--output',	dest='output',		help='write new psb to OUTPUT',			metavar='OUTPUT')
 	parser.add_option('-r',	'--rom',	dest='rom',		help='replace the rom file with ROM',		metavar='ROM')
 	(global_vars.options, args) = parser.parse_args()
@@ -284,11 +290,14 @@ The file output2.psb.m will be encrypted with 'mysecretkey'
 
 			replace_rom_file(mypsb)
 
+			# Write out the YAML first for debugging
+			if global_vars.options.yaml:
+				write_yaml(mypsb)
+
 			write_psb(mypsb)
 			write_bin(mypsb)
 
 			if global_vars.options.files:
-				write_yaml(mypsb)
 				write_subfiles(mypsb)
 				write_chunks(mypsb)
 

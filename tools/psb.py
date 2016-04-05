@@ -978,9 +978,18 @@ class	PSB():
 
 		self.raw_names = unpacker._buffer[self.header.offset_names : unpacker.tell()]
 
-		if 1:
+		if global_vars.options.debug:
 			nt2 = PSB_NameTable()
 			nt2.build_tables(self.names)
+			# Confirm the nt2 build works ok
+			for i in range(0, len(nt.starts)):
+				# FIXME - should not need the rstrip
+				s1 = nt.get_name(i).rstrip('\0')
+				s2 = nt2.get_name(i).rstrip('\0')
+				if s1 != s2:
+					print(">%d %d '%s'" % (i, len(s1), s1))
+					print(">%d %d '%s'" % (i, len(s2), s2))
+			# Dump the node trees to see what differs
 			nt.build_debug_tree("NT1")
 			nt2.build_debug_tree("NT2")
 
@@ -1463,12 +1472,17 @@ class	PSB_NameTable:
 					self.jumps[ji_child] = node_tree.nodes[ni].ji
 
 		# Fix any remaining None entries
+		fixed=0
 		for ji in range(len(self.jumps)):
 			if self.jumps[ji] is None:
 				self.jumps[ji] = 0
+				fixed += 1
+		print("Fixed %d gaps" % fixed)
 
+	# Brute-force search for gaps
+	# This works ok-ish, but leaves more gaps than build_jumps1!
 	def	build_jumps2(self, node_tree):
-		self.jumps = [None]# * len(node_tree.nodes)
+		self.jumps = [None] * len(node_tree.nodes)
 		for ni in range(len(node_tree.nodes)):
 			if node_tree.nodes[ni].ji == 0:
 				# Find a space for ourselves
@@ -1477,6 +1491,7 @@ class	PSB_NameTable:
 					# Make sure the table is long enough
 					if len(self.jumps) <= o:
 						self.jumps.extend([None] * (o - len(self.jumps) +1))
+						print("Extending jumps table to %d entries" % len(self.jumps))
 					# If this entry is empty, we can use it.
 					if self.jumps[o] is None:
 						node_tree.nodes[ni].ji = o
@@ -1484,6 +1499,18 @@ class	PSB_NameTable:
 						self.jumps[o] = node_tree.nodes[pi].ji
 						# Quit the offset search loop
 						break
+				else:
+					# We got to the end of the jumps table without finding a free slot - extend the table
+					offset = len(self.jumps)
+					o = offset + node_tree.nodes[ni].c
+					# Make sure the table is long enough
+					if len(self.jumps) <= o:
+						self.jumps.extend([None] * (o - len(self.jumps) +1))
+						print("Extending jumps table to %d entries" % len(self.jumps))
+					# Use the new empty entry
+					node_tree.nodes[ni].ji = o
+					pi = node_tree.nodes[ni].p
+					self.jumps[o] = node_tree.nodes[pi].ji
 			# Find a space for our children
 			for offset in range(1, len(self.jumps)):
 				# For each child we have...
@@ -1492,6 +1519,7 @@ class	PSB_NameTable:
 					# Make sure the table is long enough
 					if len(self.jumps) <= o:
 						self.jumps.extend([None] * (o - len(self.jumps) +1))
+						print("Extending jumps table to %d entries" % len(self.jumps))
 					# If this entry is used, quit the child loop and try the next offset
 					#print(ni, offset, o, len(self.jumps))
 					if self.jumps[o] is not None:
@@ -1518,14 +1546,18 @@ class	PSB_NameTable:
 					# Make sure the table is long enough
 					if len(self.jumps) <= o:
 						self.jumps.extend([None] * (o - len(self.jumps) +1))
+						print("Extending jumps table to %d entries" % len(self.jumps))
 					# Set our child node's jump index
 					node_tree.nodes[ci].ji = o
 					# Set our child's jump target to our jump index
 					self.jumps[o] = node_tree.nodes[ni].ji
 		# Fix any remaining None entries
+		fixed = 0
 		for ji in range(len(self.jumps)):
 			if self.jumps[ji] is None:
 				self.jumps[ji] = 0
+				fixed += 1
+		print("Fixed %d gaps" % fixed)
 
 	# Fill in the offsets table
 	def	build_offsets(self, node_tree):
