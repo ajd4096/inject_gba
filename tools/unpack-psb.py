@@ -221,9 +221,14 @@ To insert a rom:
 
 This will:
 * Read in originaldir/alldata{.psb.m, .bin}
+
+* Save the original rom in workdir/alldata.rom
+
 * Replace the original rom with /path/to/new.rom
-* Create workdir/alldata{.psb.m, .bin, .rom}
-* The original rom is stored in workdir/alldata.rom
+
+* Create workdir/alldata{.psb.m, .bin}
+The file workdir/alldata.psb.m will be encrypted with 'alldata.psb.m'
+
 -----
 Examples:
 
@@ -231,23 +236,26 @@ Examples:
 This will:
 
 * Read alldata.psb.m (and alldata.bin)
-* Create output{.psb.m, .bin, .rom}
-* The original rom is stored in output.rom
+* Save the original rom in output.rom
+* Create output{.psb.m, .bin}
+The file output.psb.m will be encrypted with 'output.psb.m'
 
 
-%prog -f -o output.psb.m alldata.psb.m
+%prog -y -f -o output.psb.m alldata.psb.m
 
 This will:
 * Read alldata.psb.m (and alldata.bin)
-* Create output{.psb.m, .bin, .rom}
-* Create output.yaml + output_NNNN_* files
+* Create output{.psb.m, .bin}
+* Create output.yaml
+* Save any sub-files in output.files/
+* Save any chunks in output.files/
 
 
 %prog -o output2.psb.m -k mysecretkey output.yaml
 
 This will:
-* Read output.yaml (and output_* files)
-* Create output2{.psb.m, .bin, .rom}
+* Read output.yaml (and output.files/* and output.chunks/*)
+* Create output2{.psb.m, .bin}
 The file output2.psb.m will be encrypted with 'mysecretkey'
 
 """)
