@@ -1,27 +1,35 @@
 # inject_gba
 
+## Description:
+GBA injection for Wii-U virtual console games.
+
+## Warning:
 This is still a massive work-in-progress.
 
-# Requirements:
-## Python 3
+## Requirements:
+### Python 3
 No, it won't work with Python 2.
 Python 3 was released in 2008, it is time to move on.
 
-## Various python modules.
-I do not know what modules your system installs by default.
-If it complains about a missing import, install it.
+### Various python modules.
+Initial attempt at packaging, I may have missed some dependencies.
+If you get a missing import, install it.
 
------
+The GUI requires python's tkinter, you will need to install this yourself.
 
-To insert a GBA rom into alldata.bin:
+## Installation:
 
-unpack-psb.py -r /path/to/new.rom -o workdir/alldata.psb.m originaldir/alldata.psb.m
+python3 setup.py install
 
-This will:
-* Read in originaldir/alldata{.psb.m, .bin}
+You can run this without installing using inject_gba_cli.py and inject_gba_gui.py
 
-* Save the original rom in workdir/alldata.rom
+## Quick Start:
 
-* Replace the original rom with /path/to/new.rom
+To start the GUI:
+inject_gba_gui
 
-* Create workdir/alldata{.psb.m, .bin}
+To extract a rom:
+inject_gba_cli --inpsb /path/to/alldata.psb.m --outrom /path/to/extracted.rom
+
+To inject a rom:
+inject_gba_cli --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /path/to/new/alldata.psb.m
