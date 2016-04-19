@@ -14,8 +14,6 @@ import	zlib
 
 import	global_vars
 
-DEBUG_FILE_COMPRESSION=0
-
 #
 # Define our object classes
 #
@@ -258,18 +256,18 @@ class	PSB():
 	def	unpack(self, psb_data):
 		unpacker = buffer_unpacker(psb_data)
 
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Parsing header:")
 			l = len(unpacker.data())
 			print("PSB data length %d 0x%X" % (l, l))
 
 		self.header.unpack(unpacker)
 		if self.header.signature != b'PSB\x00':
-			if global_vars.options.debug:
+			if global_vars.verbose > global_vars.debug_level:
 				print("Not a PSB file")
 				print(self.header.signature)
 			return
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print(self.header)
 
 		# Read in the arrays of names
@@ -326,7 +324,7 @@ class	PSB():
 		self.chunkdata = []
 		for cn in self.chunknames:
 			filename = os.path.join(base_dir, cn)
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print("Reading chunk '%s'" % filename)
 			data = open(filename, 'rb').read()
 			self.chunkdata.append(data)
@@ -340,7 +338,7 @@ class	PSB():
 			if os.path.isfile(filename):
 				print("File '%s' exists, not over-writing" % filename)
 			else:
-				if global_vars.options.verbose:
+				if global_vars.verbose:
 					print("Writing file %s" % filename)
 				# Write out the chunk data
 				open(filename, 'wb').write(self.chunkdata[i])
@@ -357,7 +355,7 @@ class	PSB():
 			# If we are longer, we need to rewrite the entries section to record the larger size
 			# If we are more than 0x800 bytes smaller, we need to rewrite the entries section to fix the offsets of each following entry
 			if new_length > fi.l or (new_length + 0x800) < fi.l:
-				if global_vars.options.verbose:
+				if global_vars.verbose:
 					print("File '%s' length differs, re-writing entries table" % self.names[fi.ni])
 					print("Old length %d 0x%X" % (fi.l, fi.l))
 					print("New length %d 0x%X" % (new_length, new_length))
@@ -401,7 +399,7 @@ class	PSB():
 			# Pad the data to a multiple of 0x800 bytes
 			if new_length % 0x800:
 				fd += b'\x00' * (0x800 - new_length % 0x800)
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print("Padded length %d 0x%X" % (len(fd), len(fd)))
 
 			# Add the self.subfile to the ADB array
@@ -420,7 +418,7 @@ class	PSB():
 	# The data is compressed/encrypted
 	def	read_subfile(self, base_dir, i):
 		fi = self.fileinfo[i]
-		if not global_vars.options.quiet:
+		if global_vars.verbose:
 			print("Reading '%s'" % (self.names[fi.ni]))
 
 		# Read in the raw data
@@ -442,7 +440,7 @@ class	PSB():
 	def	replace_subfile(self, i, fd0):
 		fi = self.fileinfo[i]
 
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Raw length %d 0x%X" % (len(fd0), len(fd0)))
 
 		# We save sub-psb files as-is
@@ -459,7 +457,7 @@ class	PSB():
 			# Obfuscate the data using the original filename for the seed
 			fd2 = unobfuscate_data(fd1, self.names[fi.ni])
 
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Compressed length %d 0x%X" % (len(fd2), len(fd2)))
 
 		# Save the compressed/encrypted data in our subfile array
@@ -470,7 +468,7 @@ class	PSB():
 		# If we are more than 0x800 bytes smaller, we need to rewrite the entries section to fix the offsets of each following entry
 		new_length = len(fd2)
 		if new_length > fi.l or (new_length + 0x800) < fi.l:
-			if not global_vars.options.quiet:
+			if global_vars.verbose:
 				print("File '%s' length differs, re-writing entries table" % self.names[fi.ni])
 				print("Old length %d 0x%X" % (fi.l, fi.l))
 				print("New length %d 0x%X" % (new_length, new_length))
@@ -485,7 +483,7 @@ class	PSB():
 		self.subfile_data = []
 		for i, fi in enumerate(self.fileinfo):
 			#print("%d %s" % (i, fi))
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print("Extracting file %s" % self.names[fi.ni])
 
 			# Get the chunk of data from the alldata.bin file
@@ -522,7 +520,7 @@ class	PSB():
 			return
 
 		fi = self.fileinfo[i]
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Writing '%s'" % filename)
 	
 		# Make sure the output directory exists
@@ -530,7 +528,7 @@ class	PSB():
 
 		# Get a copy of the encrypted/compressed data from our array
 		fd2 = self.subfile_data[i][:]
-		if DEBUG_FILE_COMPRESSION:
+		if global_vars.verbose > global_vars.debug_level:
 			open(filename + '.2', 'wb').write(fd2)
 
 		# Compress the data
@@ -540,7 +538,7 @@ class	PSB():
 		else:
 			# Unobfuscate the data using the original filename for the seed
 			fd1 = unobfuscate_data(fd2, self.names[fi.ni])
-			if DEBUG_FILE_COMPRESSION:
+			if global_vars.verbose > global_vars.debug_level:
 				open(filename + '.1', 'wb').write(fd1)
 
 			# Uncompress the data
@@ -666,7 +664,7 @@ class	PSB():
 			for no in obj.v:
 				if (type(no) != NameObject):
 					print("Expected NameObject, got %s" % type(no))
-				if global_vars.options.verbose:
+				if global_vars.verbose:
 					print("<<< %s %s" % (name, self.names[no.ni]))
 
 				# Pack our object into a temporary buffer to get the size
@@ -702,7 +700,7 @@ class	PSB():
 
 	def	unpack_object(self, unpacker, name):
 		offset = unpacker.tell()
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("")
 			print(">>> %s @0x%X" % (name, unpacker.tell()))
 			print(unpacker.peek16())
@@ -711,21 +709,21 @@ class	PSB():
 			# from exm2lib & inspection, length = 0, purpose unknown
 			t = unpacker('<B')[0]
 			v = 0
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
 			return TypeValue(t, None)
 		elif t == 4:
 			# int, 0 bytes
 			t = unpacker('<B')[0]
 			v = 0
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
 			return TypeValue(t, 0)
 		elif t >= 5 and t <= 12:
 			# int, 1-8 bytes
 			t = unpacker('<B')[0]
 			v = int.from_bytes(unpacker('<%dB' % (t - 5 + 1)), 'little')
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value %d 0x%X" % (name, offset, t, v, v))
 			return TypeValue(t, v)
 		elif t >= 13 and t <= 20:
@@ -743,7 +741,7 @@ class	PSB():
 			# index into strings array, 1-4 bytes
 			t = unpacker('<B')[0]
 			v = int.from_bytes(unpacker('<%dB' % (t - 21 + 1)), 'little')
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value string %d" % (name, offset, t, v))
 			assert(v <= len(self.strings))
 			return String(t, v, self.strings[v])
@@ -751,28 +749,28 @@ class	PSB():
 			# index into chunks array, 1-4 bytes
 			t = unpacker('<B')[0]
 			v = int.from_bytes(unpacker('<%dB' % (t - 25 + 1)), 'little')
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value chunk %d" % (name, offset, t, v))
 			assert(v <= len(self.chunkdata))
 			return TypeValue(t, v)
 		elif t == 29:
 			# float, 0 bytes?
 			t = unpacker('<B')[0]
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value ?" % (name, offset, t))
 			return TypeValue(t, 0.0)
 		elif t == 30:
 			# float, 4 bytes
 			t = unpacker('<B')[0]
 			v = unpacker('f')[0]
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
 			return TypeValue(t, v)
 		elif t == 31:
 			# float, 8 bytes
 			t = unpacker('<B')[0]
 			v = unpacker('d')[0]
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X type %d value %f" % (name, offset, t, v))
 			return TypeValue(t, v)
 		elif t == 32:
@@ -781,12 +779,12 @@ class	PSB():
 			t = unpacker('<B')[0]
 			offsets = self.unpack_object(unpacker, name + '|offsets')
 			seek_base = unpacker.tell()
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X (%d entries)" % (name, offset, len(offsets.v)))
 			v = []
 			for i in range(0, len(offsets.v)):
 				o = offsets.v[i]
-				if global_vars.options.verbose:
+				if global_vars.verbose:
 					print(">>> %s @0x%X entry %d:" % (name, offset, i))
 				unpacker.seek(seek_base + o)
 				v1 = self.unpack_object(unpacker, name + "|%d" % i)
@@ -800,7 +798,7 @@ class	PSB():
 			offsets = self.unpack_object(unpacker, name + '|offsets')
 			seek_base = unpacker.tell()
 			assert(len(names.v) == len(offsets.v))
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print(">>> %s @0x%X (%d entries)" % (name, offset, len(names.v)))
 
 			# For each entry in the name list...
@@ -809,7 +807,7 @@ class	PSB():
 				# Get the name string and the offset
 				ns = self.names[ni]
 				o = offsets.v[i]
-				if global_vars.options.verbose:
+				if global_vars.verbose:
 					print(">>> %s|%s @0x%X entry %d:" % (name, ns, offset, i))
 					print(unpacker.peek16())
 
@@ -851,14 +849,6 @@ class	PSB():
 		name = "C%4.4d" % chunk_index
 		return name
 		
-	# Get the sub-file filename
-	def	getFilename(self, file_index):
-		if global_vars.options.basename:
-			name = "%s_F%4.4d" % (os.path.basename(global_vars.options.basename), file_index)
-		else:
-			name = "%s_F%4.4d" % ('BASE', file_index)
-		return name
-		
 	def	pack_chunks(self, packer):
 		# Build a lists of offsets and lengths
 		offsets = []
@@ -898,7 +888,7 @@ class	PSB():
 		# Read in our chunk offsets array (this may be empty)
 		unpacker.seek(self.header.offset_chunk_offsets)
 		chunk_offsets = self.unpack_object(unpacker, 'chunk_offsets')
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Chunk offsets count %d" % len(chunk_offsets.v))
 			for i in range(0, len(chunk_offsets.v)):
 				print("Chunk offset %d = %d 0x%X" % (i, chunk_offsets.v[i], chunk_offsets.v[i]))
@@ -908,7 +898,7 @@ class	PSB():
 		# Read in our chunk lengths array (this may be empty)
 		unpacker.seek(self.header.offset_chunk_lengths)
 		chunk_lengths = self.unpack_object(unpacker, 'chunk_lengths')
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Chunk lengths count %d" % len(chunk_lengths.v))
 			for i in range(0, len(chunk_lengths.v)):
 				print("Chunk length %d = %d 0x%X" % (i, chunk_lengths.v[i], chunk_lengths.v[i]))
@@ -973,12 +963,12 @@ class	PSB():
 		for i in range(0, len(nt.starts)):
 			s = nt.get_name(i).rstrip('\0')
 			self.names.append(s)
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print("Name %d %s" % (i, s))
 
 		self.raw_names = unpacker._buffer[self.header.offset_names : unpacker.tell()]
 
-		if global_vars.options.debug:
+		if global_vars.verbose > global_vars.debug_level:
 			nt2 = PSB_NameTable()
 			nt2.build_tables(self.names)
 			# Confirm the nt2 build works ok
@@ -1030,7 +1020,7 @@ class	PSB():
 		strings_array	= self.unpack_object(unpacker, 'strings')
 		self.raw_strings_offsets = unpacker._buffer[self.header.offset_strings : unpacker.tell()]
 
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Parsing strings array (%d)" % len(strings_array.v))
 		# Read in each string
 		for i in range(0, len(strings_array.v)):
@@ -1039,7 +1029,7 @@ class	PSB():
 			unpacker.seek(self.header.offset_strings_data + o)
 			s = unpacker.get_cstr();
 			self.strings.append(s)
-			if global_vars.options.verbose:
+			if global_vars.verbose:
 				print("String %d  @0x%X %s" % (i, o, s))
 		self.raw_strings_data = unpacker._buffer[self.header.offset_strings_data : unpacker.tell()]
 
@@ -1105,7 +1095,7 @@ def	get_xor_key(filename):
 
 	# Take our game hash_seed (always the same), and append our filename
 	hash_seed = fixed_seed + os.path.basename(filename).lower().encode('latin-1')
-	if global_vars.options.verbose:
+	if global_vars.verbose:
 		print("Using hash seed:\t%s" % hash_seed)
 
 	# Take the MD5 hash of the seed+filename
@@ -1127,7 +1117,7 @@ def	get_xor_key(filename):
 
 		# Add them to our key buffer
 		key_buffer.extend(s)
-	if global_vars.options.verbose:
+	if global_vars.verbose:
 		print("Using key:\t%s," % binascii.hexlify(bytes(key_buffer)))
 
 	return key_buffer
@@ -1144,7 +1134,7 @@ def	unobfuscate_data(original_data, filename):
 	header.unpack(buffer_unpacker(data))
 
 	if header.signature == b'mdf\x00':
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("sig=%s" % header.signature)
 			print("len=%d (0x%X)" % (header.length, header.length))
 
@@ -1195,7 +1185,7 @@ def	uncompress_data(data):
 		uncompressed = zlib.decompress(bytes(data[header.offset1 : ]))
 		if (len(uncompressed) != header.length):
 			print("Warning: uncompressed length %d does not match header length %d" % (len(uncompressed), header.length))
-		if global_vars.options.verbose:
+		if global_vars.verbose:
 			print("Uncompressed Length: %d 0x%X" % (len(uncompressed), len(uncompressed)))
 		return uncompressed
 	else:

@@ -10,18 +10,18 @@ import	global_vars
 
 def	load_from_psb(psb_filename):
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Reading '%s'" % psb_filename)
 
 	# Read in the encrypted/compressed psb data
 	psb_data2 = bytearray(open(psb_filename, 'rb').read())
 
 	# Decrypt the psb data using the filename, or --key if provided.
-	if global_vars.options.key:
-		psb_data1 = psb.unobfuscate_data(psb_data2, global_vars.options.key)
+	if options.key:
+		psb_data1 = psb.unobfuscate_data(psb_data2, options.key)
 	else:
 		psb_data1 = psb.unobfuscate_data(psb_data2, psb_filename)
-	if global_vars.options.debug:
+	if options.debug:
 		open(psb_filename + '.1', 'wb').write(psb_data1)	# compressed
 
 	if psb_filename.endswith('.psb'):
@@ -30,7 +30,7 @@ def	load_from_psb(psb_filename):
 	else:
 		# Uncompress the psb data
 		psb_data0 = psb.uncompress_data(psb_data1)
-		if global_vars.options.debug:
+		if options.debug:
 			open(psb_filename + '.0', 'wb').write(psb_data0)	# raw
 
 	# Check we have a PSB header
@@ -57,7 +57,7 @@ def	load_from_psb(psb_filename):
 	# Read in the alldata.bin file if it exists
 	bin_filename  = base_filename + '.bin'
 	if os.path.isfile(bin_filename):
-		if not global_vars.options.quiet:
+		if not options.quiet:
 			print("Reading file %s" % bin_filename)
 		bin_data = bytearray(open(bin_filename, 'rb').read())
 
@@ -70,7 +70,7 @@ def	load_from_psb(psb_filename):
 
 def	load_from_yaml(yaml_filename):
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Reading '%s'" % yaml_filename)
 
 	yaml_data = open(yaml_filename, 'rt').read()
@@ -80,12 +80,12 @@ def	load_from_yaml(yaml_filename):
 
 	# Read in our subfiles
 	# This will update the PSB.fileinfo[] entries with the new lengths etc
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Reading subfiles")
 	mypsb.read_all_subfiles(os.path.dirname(yaml_filename))
 
 	# Read in our chunk files
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Reading chunk files")
 	mypsb.read_chunks(os.path.dirname(yaml_filename))
 
@@ -94,31 +94,31 @@ def	load_from_yaml(yaml_filename):
 
 # Write out the yaml file
 def	write_yaml(mypsb):
-	filename = global_vars.options.basename + '.yaml'
+	filename = options.basename + '.yaml'
 
 	if os.path.isfile(filename):
 		print("File '%s' exists, not over-writing" % filename)
 		return
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Writing '%s'" % filename)
 
 	open(filename, 'wt').write(mypsb.print_yaml())
 
 # Write out our PSB
 def	write_psb(mypsb):
-	filename = global_vars.options.output
+	filename = options.output
 
 	if os.path.isfile(filename):
 		print("File '%s' exists, not over-writing" % filename)
 		return
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Writing '%s'" % filename)
 
 	# Pack our PSB object into the on-disk format
 	psb_data0 = mypsb.pack()
-	if global_vars.options.debug:
+	if options.debug:
 		open(filename + '.0', 'wb').write(psb_data0)	# raw
 
 	if filename.endswith('.psb'):
@@ -128,15 +128,15 @@ def	write_psb(mypsb):
 	elif filename.endswith('.psb.m'):
 		# Compress the PSB data
 		psb_data1 = psb.compress_data(psb_data0)
-		if global_vars.options.debug:
+		if options.debug:
 			open(filename + '.1', 'wb').write(psb_data1)	# compressed
 
 		# Encrypt the PSB data
-		if global_vars.options.key:
-			psb_data2 = psb.unobfuscate_data(psb_data1, global_vars.options.key)
+		if options.key:
+			psb_data2 = psb.unobfuscate_data(psb_data1, options.key)
 		else:
 			psb_data2 = psb.unobfuscate_data(psb_data1, filename)
-		if global_vars.options.debug:
+		if options.debug:
 			open(filename + '.2', 'wb').write(psb_data2)	# compressed/encrypted
 
 		# Write out the compressed/encrypted PSB data
@@ -147,12 +147,12 @@ def	write_rom_file(mypsb):
 	if not mypsb.fileinfo:
 		return
 
-	filename = global_vars.options.basename + '.rom'
+	filename = options.basename + '.rom'
 	if os.path.isfile(filename):
 		print("File '%s' exists, not over-writing" % filename)
 		return
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Writing '%s'" % filename)
 
 	mypsb.write_rom_file(filename)
@@ -162,18 +162,18 @@ def	write_subfiles(mypsb):
 	if not mypsb.fileinfo:
 		return
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Writing subfiles")
 
-	base_dir = global_vars.options.basename + '.files'
+	base_dir = options.basename + '.files'
 	mypsb.write_all_subfiles(base_dir)
 
 # Write out our chunks
 def	write_chunks(mypsb):
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Writing chunk files")
 
-	base_dir = global_vars.options.basename + '.chunks'
+	base_dir = options.basename + '.chunks'
 	mypsb.write_chunks(base_dir)
 
 # Write out the ADB
@@ -184,22 +184,22 @@ def	write_bin(mypsb):
 	if bin_data is None:
 		return
 
-	filename = global_vars.options.basename + '.bin'
+	filename = options.basename + '.bin'
 
 	if os.path.isfile(filename):
 		print("File '%s' exists, not over-writing" % filename)
 		return
 
-	if not global_vars.options.quiet:
+	if not options.quiet:
 		print("Writing '%s'" % filename)
 
 	open(filename, 'wb').write(bytes(bin_data))
 
 
 def	replace_rom_file(mypsb):
-	if global_vars.options.rom:
-		filename = global_vars.options.rom
-		if not global_vars.options.quiet:
+	if options.rom:
+		filename = options.rom
+		if not options.quiet:
 			print("Reading '%s'" % filename)
 
 		fd = open(filename, 'rb').read()
@@ -267,19 +267,22 @@ The file output2.psb.m will be encrypted with 'mysecretkey'
 	parser.add_option('-k',	'--key',	dest='key',		help='encrypt output.psb.m using KEY',		metavar='KEY')
 	parser.add_option('-o',	'--output',	dest='output',		help='write new psb to OUTPUT',			metavar='OUTPUT')
 	parser.add_option('-r',	'--rom',	dest='rom',		help='replace the rom file with ROM',		metavar='ROM')
-	(global_vars.options, args) = parser.parse_args()
+	(options, args) = parser.parse_args()
+
+	if options.verbose:
+		global_vars.verbose = 1
 
 	if not args:
 		parser.print_help()
 
 	# Remove the extension from the output filename
-	if global_vars.options.output:
-		filename = global_vars.options.output
+	if options.output:
+		filename = options.output
 		# '.psb.m' isn't a single extension :(
 		if filename.endswith('.psb'):
-			global_vars.options.basename = filename[:-len('.psb')]
+			options.basename = filename[:-len('.psb')]
 		elif filename.endswith('.psb.m'):
-			global_vars.options.basename = filename[:-len('.psb.m')]
+			options.basename = filename[:-len('.psb.m')]
 
 	for filename in args:
 		if filename.endswith('.psb') or filename.endswith('.psb.m'):
@@ -287,9 +290,9 @@ The file output2.psb.m will be encrypted with 'mysecretkey'
 		elif filename.endswith('.yaml'):
 			mypsb = load_from_yaml(filename)
 
-		if global_vars.options.basename:
+		if options.basename:
 			# Make sure the directory exists
-			base_dir = os.path.dirname(global_vars.options.basename)
+			base_dir = os.path.dirname(options.basename)
 			if base_dir:
 				os.makedirs(base_dir, exist_ok = True)
 
@@ -299,13 +302,13 @@ The file output2.psb.m will be encrypted with 'mysecretkey'
 			replace_rom_file(mypsb)
 
 			# Write out the YAML first for debugging
-			if global_vars.options.yaml:
+			if options.yaml:
 				write_yaml(mypsb)
 
 			write_psb(mypsb)
 			write_bin(mypsb)
 
-			if global_vars.options.files:
+			if options.files:
 				write_subfiles(mypsb)
 				write_chunks(mypsb)
 
