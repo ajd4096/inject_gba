@@ -26,10 +26,15 @@ You can run this without installing using inject_gba_cli.py and inject_gba_gui.p
 ## Quick Start:
 
 To start the GUI:
+
 inject_gba_gui
 
+
 To extract a rom:
+
 inject_gba_cli --inpsb /path/to/alldata.psb.m --outrom /path/to/extracted.rom
 
+
 To inject a rom:
+
 inject_gba_cli --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /path/to/new/alldata.psb.m
