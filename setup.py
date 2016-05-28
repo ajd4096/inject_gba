@@ -11,8 +11,7 @@ setup(
 	packages	= ['inject_gba'],
 	entry_points	= {
 		"console_scripts": [
-			'inject_gba_cli = inject_gba.inject_gba:main_cli',
-			'inject_gba_gui = inject_gba.inject_gba:main_gui',
+			'inject_gba = inject_gba.inject_gba:main',
 		],
 	},
 	install_requires	= [

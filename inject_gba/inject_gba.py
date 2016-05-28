@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-import	fnmatch
 import	argparse
 import	os
+import	sys
 
-import	psb
-import	global_vars
+import	inject_gba.global_vars	as global_vars
+import	inject_gba.psb		as psb
 
 def	load_from_psb(psb_filename):
 	if not psb_filename:
@@ -184,13 +184,28 @@ This will:
 	parser = argparse.ArgumentParser(
 		formatter_class=argparse.RawDescriptionHelpFormatter,
 		epilog=epilog)
+
 	parser.add_argument('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='count',		default=0)
-	parser.add_argument(		'--inpsb',	dest='inpsb',		help='Read INPSB',				metavar='INPSB',	required=True)
+
+	group = parser.add_mutually_exclusive_group(required=True)
+	group.add_argument(		'--gui',	dest='gui',		help='Use GUI',					action='store_true',	default=False)
+	group.add_argument(		'--inpsb',	dest='inpsb',		help='Read INPSB',				metavar='INPSB')
 	parser.add_argument(		'--outrom',	dest='outrom',		help='Write the rom file to OUTROM',		metavar='OUTROM')
 	parser.add_argument(		'--inrom',	dest='inrom',		help='Replace the rom file with INROM',		metavar='INROM')
 	parser.add_argument(		'--outpsb',	dest='outpsb',		help='Write new psb to OUTPSB',			metavar='OUTPSB')
-	options = parser.parse_args()
 
+	if len(sys.argv) <= 1:
+		parser.print_help()
+		exit(0)
+	else:
+		options = parser.parse_args()
+
+	if options.gui:
+		main_gui(options)
+	else:
+		main_cli(options)
+
+def	main_cli(options):
 	global_vars.verbose = options.verbose
 
 	# We must have an inpsb (this should be enforced by the parser)
@@ -211,5 +226,147 @@ This will:
 		write_psb(mypsb, options.outpsb)
 		write_bin(mypsb, options.outpsb)
 
-if __name__ == "__main__":
-	main()
+def	main_gui(options):
+	import	easygui as eg
+
+	app_name = 'GBA injection wizard'
+	app_title = app_name
+
+	choose_task_text ='''This tool provides a simplified interface to:
+
+	* Decrypt, decompress, and unpack an alldata.psb.m/alldata.bin file,
+
+	* Extract or replace the ROM file
+
+	* Repack, compress, and encrypt a new alldata.psb.m/alldata.bin file.
+
+
+	What do you want to do?'''
+	choose_task_choices = [
+		'Extract ROM',
+		'Inject ROM',
+		'Quit',
+		]
+
+	inject_choose_inrom_text = '''Choose your input ROM'''
+	inject_choose_inpsb_text = '''Choose your input alldata.psb.m'''
+	inject_choose_outpsb_text = '''Choose your output alldata.psb.m'''
+	inject_confirm_text = '''
+	Inject a ROM into a .psb.m file
+
+	We are about to inject this rom:
+	{rom}
+
+	into this psb:
+	{inpsb}
+
+	and save the result as:
+	{outpsb}
+
+	'''
+
+	extract_choose_inpsb_text = '''Choose your input alldata.psb.m'''
+	extract_choose_outrom_text = '''Choose your output ROM'''
+	extract_confirm_text = '''
+	Extract the ROM from a .psb.m file
+
+	We are about to extract the ROM from this psb:
+	{inpsb}
+
+	and save the ROM as:
+	{outrom}
+
+	'''
+
+
+	state = 'choose_task'
+	while state:
+		if state == 'choose_task':
+			app_title = app_name + ' - Choose Task'
+			rv = eg.buttonbox(choose_task_text, app_title, choose_task_choices)
+			#print(type(rv), rv)
+			if not rv or rv == '':
+				exit(0)
+			if rv == choose_task_choices[0]:
+				state = 'extract'
+			elif rv == choose_task_choices[1]:
+				state = 'inject'
+			elif rv == choose_task_choices[2]:
+				state = 'quit'
+				exit(0)
+		elif state == 'extract':
+			# Hidden state to clear our filenames
+			app_title = 'Extract ROM'
+			inpsb = ''
+			outrom = ''
+			state = 'extract_choose_inpsb'
+		elif state == 'extract_choose_inpsb':
+			rv = eg.fileopenbox(extract_choose_inpsb_text, app_title, filetypes=['*', ['*.psb.m', 'psb.m files']])
+			#print(type(rv), rv)
+			if not rv or rv == '' or rv == '.':
+				state = 'choose_task'
+			else:
+				inpsb = rv
+				state = 'extract_choose_outrom'
+		elif state == 'extract_choose_outrom':
+			rv = eg.filesavebox(extract_choose_outrom_text, title=app_title, default='gba.rom', filetypes=['*.rom', '*.gba'])
+			#print(type(rv), rv)
+			if not rv or rv == '':
+				state = 'choose_task'
+			else:
+				outrom = rv
+				state = 'extract_confirm'
+		elif state == 'extract_confirm':
+			rv = eg.ccbox(extract_confirm_text.format(inpsb=inpsb, outrom=outrom), app_title)
+			#print(type(rv), rv)
+			if not rv or rv == '':
+				state = 'choose_task'
+			else:
+				mypsb = load_from_psb(inpsb)
+				write_rom(mypsb, outrom)
+				state = 'choose_task'
+		elif state == 'inject':
+			# Hidden state to clear our filenames
+			app_title = 'Inject ROM'
+			inrom = ''
+			inpsb = ''
+			outpsb = ''
+			state = 'inject_choose_rom'
+		elif state == 'inject_choose_rom':
+			rv = eg.fileopenbox(inject_choose_inrom_text, app_title, filetypes=['*.rom', '*.gba'])
+			#print(type(rv), rv)
+			if not rv or rv == '' or rv == '.':
+				state = 'choose_task'
+			else:
+				inrom = rv
+				state = 'inject_choose_inpsb'
+		elif state == 'inject_choose_inpsb':
+			rv = eg.fileopenbox(inject_choose_inpsb_text, app_title, filetypes=[['*.psb.m', 'psb.m files']])
+			#print(type(rv), rv)
+			if not rv or rv == '' or rv == '.':
+				state = 'choose_task'
+			else:
+				inpsb = rv
+				state = 'inject_choose_outpsb'
+		elif state == 'inject_choose_outpsb':
+			rv = eg.filesavebox(inject_choose_outpsb_text, title=app_title, default='alldata.psb.m', filetypes=[['*.psb.m', 'psb.m files']])
+			#print(type(rv), rv)
+			if not rv or rv == '' or rv == '.':
+				state = 'choose_task'
+			else:
+				outpsb = rv
+				state = 'inject_confirm'
+		elif state == 'inject_confirm':
+			rv = eg.ccbox(inject_confirm_text.format(rom=inrom, inpsb=inpsb, outpsb=outpsb), app_title)
+			#print(type(rv), rv)
+			if not rv or rv == '':
+				state = 'choose_task'
+			else:
+				mypsb = load_from_psb(inpsb)
+				read_rom(mypsb, inrom)
+				write_psb(mypsb, outpsb)
+				write_bin(mypsb, outpsb)
+				state = 'choose_task'
+		else:
+			print("Unknown state '%s'" % state)
+			exit(1)

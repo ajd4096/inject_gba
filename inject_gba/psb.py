@@ -4,7 +4,6 @@ import	collections
 import	ctypes
 import	hashlib
 import	html
-import	mt19937
 import	optparse
 import	os
 import	struct
@@ -12,7 +11,8 @@ import	sys
 import	yaml
 import	zlib
 
-import	global_vars
+import	inject_gba.global_vars	as global_vars
+import	inject_gba.mt19937	as mt19937
 
 #
 # Define our object classes
