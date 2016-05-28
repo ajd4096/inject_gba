@@ -48,15 +48,16 @@ sudo python3.5 setup.py install
 ## Quick Start:
 
 To start the GUI:
-
-inject_gba_gui
-
+```
+inject_gba --gui
+```
 
 To extract a rom:
-
-inject_gba_cli --inpsb /path/to/alldata.psb.m --outrom /path/to/extracted.rom
-
+```
+inject_gba --inpsb /path/to/alldata.psb.m --outrom /path/to/extracted.rom
+```
 
 To inject a rom:
-
-inject_gba_cli --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /path/to/new/alldata.psb.m
+```
+inject_gba --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /path/to/new/alldata.psb.m
+```
