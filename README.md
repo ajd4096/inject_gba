@@ -1,10 +1,16 @@
 # inject_gba
 
+-----
+
 ## Description:
 GBA injection for Wii-U virtual console games.
 
+-----
+
 ## Warning:
 This is still a massive work-in-progress.
+
+-----
 
 ## Requirements:
 ### Python 3
@@ -17,11 +23,30 @@ If you get a missing import, install it.
 
 The GUI requires python's tkinter, you will need to install this yourself.
 
+-----
+
 ## Installation:
 
-python3 setup.py install
+### Windows (I tested Python 3.5.1 on Windows 8.1)
 
-You can run this without installing using inject_gba_cli.py and inject_gba_gui.py
+Install the 32-bit python, even on 64-bit windows.
+https://www.python.org/downloads/windows/
+
+If you get error 0x80240017, make sure you have installed all updates.
+If you still get the same error you may need to update the Universal C Runtime:
+https://support.microsoft.com/en-au/kb/2999226
+
+Select "Install for all users" and "Add python to PATH"
+
+Open a CMD prompt as administrator and run
+```
+python setup.py install
+```
+
+This will install a inject_gba.exe, you can run this from anywhere.
+You do not need to be in the source directory.
+You do not need to specify a path.
+It works just by typing "inject_gba".
 
 ### Centos 6
 The easiest way to install Python 3 is from the ius repo at http://ius.io
@@ -44,6 +69,8 @@ Install inject_gba using:
 ```
 sudo python3.5 setup.py install
 ```
+
+-----
 
 ## Quick Start:
 
