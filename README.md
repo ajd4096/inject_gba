@@ -29,11 +29,15 @@ The GUI requires python's tkinter, you will need to install this yourself.
 
 ### Windows (I tested Python 3.5.1 on Windows 8.1)
 
-Install the 32-bit python, even on 64-bit windows.
+Fetch Python 3.5.1 from here:
+
 https://www.python.org/downloads/windows/
+
+(I have read that some 64-bit libraries have issues, you may want to install the 32-bit python,even on 64-bit windows. That is what I tested.)
 
 If you get error 0x80240017, make sure you have installed all updates.
 If you still get the same error you may need to update the Universal C Runtime:
+
 https://support.microsoft.com/en-au/kb/2999226
 
 Select "Install for all users" and "Add python to PATH"
@@ -43,10 +47,20 @@ Open a CMD prompt as administrator and run
 python setup.py install
 ```
 
-This will install a inject_gba.exe, you can run this from anywhere.
-You do not need to be in the source directory.
-You do not need to specify a path.
+This will install "inject_gba.exe"
+
 It works just by typing "inject_gba".
+
+You can run this from anywhere.
+
+You do not need to specify a path.
+
+You do not need to type "python inject_gba.py".
+
+You do not need to be in the source directory.
+
+You do not need to keep the source directory.
+
 
 ### Centos 6
 The easiest way to install Python 3 is from the ius repo at http://ius.io
