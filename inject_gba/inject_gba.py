@@ -65,13 +65,26 @@ def	load_from_psb(psb_filename):
 
 	return mypsb
 
+# Count the TOCTOUs!
+def	rename_backup(filename):
+
+	# Optionally create a .bak if none exist
+	if global_vars.options.create_backup and os.path.isfile(filename) and not os.path.isfile(filename + '.bak') and not os.path.isdir(filename + '.bak') and not os.path.ismount(filename + '.bak'):
+		os.rename(filename, filename + '.bak')
+
+	# Optionally refuse to overwrite the existing file
+	if not global_vars.options.allow_overwrite and os.path.isfile(filename):
+		print("File '%s' exists, not over-writing" % filename)
+		return False
+
+	return True
+
 # Write out our PSB
 def	write_psb(mypsb, filename):
 	if not mypsb or not filename:
 		return
 
-	if os.path.isfile(filename):
-		print("File '%s' exists, not over-writing" % filename)
+	if not rename_backup(filename):
 		return
 
 	if global_vars.verbose:
@@ -119,8 +132,7 @@ def	write_bin(mypsb, psb_filename):
 
 	filename = basename + '.bin'
 
-	if os.path.isfile(filename):
-		print("File '%s' exists, not over-writing" % filename)
+	if not rename_backup(filename):
 		return
 
 	if global_vars.verbose:
@@ -132,8 +144,7 @@ def	write_rom(mypsb, filename):
 	if not mypsb or not filename:
 		return
 
-	if os.path.isfile(filename):
-		print("File '%s' exists, not over-writing" % filename)
+	if not rename_backup(filename):
 		return
 
 	if global_vars.verbose:
@@ -193,6 +204,8 @@ This will:
 	parser.add_argument(		'--outrom',	dest='outrom',		help='Write the rom file to OUTROM',		metavar='OUTROM')
 	parser.add_argument(		'--inrom',	dest='inrom',		help='Replace the rom file with INROM',		metavar='INROM')
 	parser.add_argument(		'--outpsb',	dest='outpsb',		help='Write new psb to OUTPSB',			metavar='OUTPSB')
+	parser.add_argument(		'--allow-overwrite',	dest='allow_overwrite',		help='Allow over-writing output files',				action='store_true',	default=False)
+	parser.add_argument(		'--create-backup',	dest='create_backup',		help='Create backup before over-writing output files',		action='store_true',	default=False)
 
 	if len(sys.argv) <= 1:
 		parser.print_help()
@@ -200,33 +213,34 @@ This will:
 	else:
 		options = parser.parse_args()
 
-	if options.gui:
-		main_gui(options)
-	else:
-		main_cli(options)
-
-def	main_cli(options):
 	global_vars.verbose = options.verbose
+	global_vars.options = options
 
+	if options.gui:
+		main_gui()
+	else:
+		main_cli()
+
+def	main_cli():
 	# We must have an inpsb (this should be enforced by the parser)
-	if not options.inpsb:
+	if not global_vars.options.inpsb:
 		parser.print_help()
-	mypsb = load_from_psb(options.inpsb)
+	mypsb = load_from_psb(global_vars.options.inpsb)
 
 	# If we have outrom, write it out
-	if options.outrom:
-		write_rom(mypsb, options.outrom)
+	if global_vars.options.outrom:
+		write_rom(mypsb, global_vars.options.outrom)
 
 	# If we have inrom, read it in
-	if options.inrom:
-		read_rom(mypsb, options.inrom)
+	if global_vars.options.inrom:
+		read_rom(mypsb, global_vars.options.inrom)
 
 	# If we have outpsb, write it out
-	if options.outpsb:
-		write_psb(mypsb, options.outpsb)
-		write_bin(mypsb, options.outpsb)
+	if global_vars.options.outpsb:
+		write_psb(mypsb, global_vars.options.outpsb)
+		write_bin(mypsb, global_vars.options.outpsb)
 
-def	main_gui(options):
+def	main_gui():
 	import	easygui as eg
 
 	app_name = 'GBA injection wizard'
