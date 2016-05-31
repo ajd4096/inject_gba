@@ -159,8 +159,22 @@ def	read_rom(mypsb, filename):
 	if global_vars.verbose:
 		print("Reading '%s'" % filename)
 
-	fd = open(filename, 'rb').read()
-	mypsb.replace_rom_file(fd)
+	prefix = b''
+	padding = b''
+
+	if global_vars.options.prefix:
+		prefix = open(global_vars.options.prefix, 'rb').read()
+
+	new_data = open(filename, 'rb').read()
+	old_data = mypsb.extract_rom()
+
+	if (len(prefix) + len(new_data)) < len(old_data):
+		if global_vars.options.pad00:
+			padding = b'\x00' * (len(old_data) - len(new_data) - len(prefix))
+		elif global_vars.options.padFF:
+			padding = b'\xFF' * (len(old_data) - len(new_data) - len(prefix))
+
+	mypsb.replace_rom_file(prefix + new_data + padding)
 
 
 def	main():
@@ -198,14 +212,21 @@ This will:
 
 	parser.add_argument('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='count',		default=0)
 
+	parser.add_argument(		'--allow-overwrite',	dest='allow_overwrite',		help='Allow over-writing output files',				action='store_true',	default=False)
+	parser.add_argument(		'--create-backup',	dest='create_backup',		help='Create backup before over-writing output files',		action='store_true',	default=False)
+
+	parser.add_argument(		'--prefix',		dest='prefix',			help='Prefix new rom with PREFIX',		metavar='PREFIX')
+
+	group_pad = parser.add_mutually_exclusive_group()
+	group_pad.add_argument(		'--pad00',	dest='pad00',		help='Pad new rom with 00',			action='store_true',	default=False)
+	group_pad.add_argument(		'--padFF',	dest='padFF',		help='Pad new rom with FF',			action='store_true',	default=False)
+
 	group = parser.add_mutually_exclusive_group(required=True)
 	group.add_argument(		'--gui',	dest='gui',		help='Use GUI',					action='store_true',	default=False)
 	group.add_argument(		'--inpsb',	dest='inpsb',		help='Read INPSB',				metavar='INPSB')
 	parser.add_argument(		'--outrom',	dest='outrom',		help='Write the rom file to OUTROM',		metavar='OUTROM')
 	parser.add_argument(		'--inrom',	dest='inrom',		help='Replace the rom file with INROM',		metavar='INROM')
 	parser.add_argument(		'--outpsb',	dest='outpsb',		help='Write new psb to OUTPSB',			metavar='OUTPSB')
-	parser.add_argument(		'--allow-overwrite',	dest='allow_overwrite',		help='Allow over-writing output files',				action='store_true',	default=False)
-	parser.add_argument(		'--create-backup',	dest='create_backup',		help='Create backup before over-writing output files',		action='store_true',	default=False)
 
 	if len(sys.argv) <= 1:
 		parser.print_help()

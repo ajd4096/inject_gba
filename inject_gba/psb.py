@@ -494,6 +494,11 @@ class	PSB():
 
 	# Extract the subfile_data entry for the first 'system/roms' file.
 	# The file data is unencrypted/uncompressed.
+	def	extract_rom(self):
+		for i, fi in enumerate(self.fileinfo):
+			if 'system/roms' in self.names[fi.ni]:
+				return self.subfile_data[i][:]
+
 	def	write_rom_file(self, filename):
 		for i, fi in enumerate(self.fileinfo):
 			if 'system/roms' in self.names[fi.ni]:
