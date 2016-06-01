@@ -208,6 +208,7 @@ This will:
 -----
 """
 	parser = argparse.ArgumentParser(
+		fromfile_prefix_chars='@',
 		formatter_class=argparse.RawDescriptionHelpFormatter,
 		epilog=epilog)
 
