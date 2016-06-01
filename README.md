@@ -109,3 +109,6 @@ To inject a rom:
 ```
 inject_gba --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /path/to/new/alldata.psb.m
 ```
+
+You can put options in a text file, one option per line, and run it using:
+inject_gba @optionsfile
