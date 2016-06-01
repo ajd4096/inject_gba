@@ -1,0 +1,3 @@
+[submodule "easygui"]
+	path = easygui
+	url = https://github.com/robertlugg/easygui.git

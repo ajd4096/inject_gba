@@ -3,6 +3,7 @@
 import	argparse
 import	os
 import	sys
+import	easygui	as eg
 
 import	inject_gba.global_vars	as global_vars
 import	inject_gba.psb		as psb
@@ -262,7 +263,6 @@ def	main_cli():
 		write_bin(mypsb, global_vars.options.outpsb)
 
 def	main_gui():
-	import	easygui as eg
 
 	# Default --create-backup and --allow-overwrite to ON
 	# The filesave box will ask if you want to overwrite.
@@ -284,43 +284,70 @@ def	main_gui():
 	What do you want to do?'''
 	choose_task_choices = [
 		'Extract ROM',
+		'Set Injection Options',
 		'Inject ROM',
 		'Quit',
 		]
+
+	extract_choose_inpsb_text = '''Choose your input alldata.psb.m'''
+	extract_choose_outrom_text = '''Choose your output ROM'''
+	extract_confirm_text = '''
+Extract the ROM from a .psb.m file
+
+We are about to extract the ROM from this psb:
+{inpsb}
+
+and save the ROM as:
+{outrom}
+
+'''
+
+	options_app_title		= '''Set Injection Options'''
+	options_enable_prefix_text	= '''
+Do you want to prefix the ROM?
+
+This can be used to prefix with goomba or pocketnes.
+
+'''
+	options_choose_prefix_text	= '''Choose your ROM prefix'''
+	options_enable_pad00_text = '''Do you want to pad the ROM with 00s?'''
+	options_enable_padFF_text = '''Do you want to pad the ROM with FFs?'''
+	options_confirm_text = '''
+Injecting a ROM will now prefix the rom with:
+{prefix}
+
+and pad to the original length with:
+{padding}
+'''
 
 	inject_choose_inrom_text = '''Choose your input ROM'''
 	inject_choose_inpsb_text = '''Choose your input alldata.psb.m'''
 	inject_choose_outpsb_text = '''Choose your output alldata.psb.m'''
 	inject_confirm_text = '''
-	Inject a ROM into a .psb.m file
+Inject a ROM into a .psb.m file
 
-	We are about to inject this rom:
-	{rom}
+We are about to inject this rom:
+{rom}
 
-	into this psb:
-	{inpsb}
+prefixed with:
+{prefix}
 
-	and save the result as:
-	{outpsb}
+padded with:
+{padding}
 
-	'''
+into this psb:
+{inpsb}
 
-	extract_choose_inpsb_text = '''Choose your input alldata.psb.m'''
-	extract_choose_outrom_text = '''Choose your output ROM'''
-	extract_confirm_text = '''
-	Extract the ROM from a .psb.m file
+and save the result as:
+{outpsb}
 
-	We are about to extract the ROM from this psb:
-	{inpsb}
-
-	and save the ROM as:
-	{outrom}
-
-	'''
-
+'''
 
 	state = 'choose_task'
 	while state:
+		#
+		# Choose task
+		#
 		if state == 'choose_task':
 			app_title = app_name + ' - Choose Task'
 			rv = eg.buttonbox(choose_task_text, app_title, choose_task_choices)
@@ -330,10 +357,15 @@ def	main_gui():
 			if rv == choose_task_choices[0]:
 				state = 'extract'
 			elif rv == choose_task_choices[1]:
-				state = 'inject'
+				state = 'options'
 			elif rv == choose_task_choices[2]:
+				state = 'inject'
+			elif rv == choose_task_choices[3]:
 				state = 'quit'
 				exit(0)
+		#
+		# Extract ROM
+		#
 		elif state == 'extract':
 			# Hidden state to clear our filenames
 			app_title = 'Extract ROM'
@@ -365,6 +397,68 @@ def	main_gui():
 				mypsb = load_from_psb(inpsb)
 				write_rom(mypsb, outrom)
 				state = 'choose_task'
+		#
+		# Set Injection Options
+		#
+		elif state == 'options':
+			# Hidden state to clear variables
+			app_title = options_app_title
+			prefix  = 'None'
+			padding = 'None'
+			state = 'options_enable_prefix'
+		elif state == 'options_enable_prefix':
+			rv = eg.ynbox(options_enable_prefix_text, app_title)
+			#print(type(rv), rv)
+			if rv:
+				state = 'options_choose_prefix'
+			else:
+				state = 'options_enable_pad00'
+		elif state == 'options_choose_prefix':
+			rv = eg.fileopenbox(options_choose_prefix_text, app_title, filetypes=['*.rom', '*.gba'])
+			print(type(rv), rv)
+			if not rv or rv == '' or rv == '.':
+				state = 'choose_task'
+			else:
+				prefix = rv
+				state = 'options_enable_pad00'
+		elif state == 'options_enable_pad00':
+			rv = eg.ynbox(options_enable_pad00_text, app_title)
+			#print(type(rv), rv)
+			if rv:
+				padding = '00'
+			state = 'options_enable_padFF'
+		elif state == 'options_enable_padFF':
+			rv = eg.ynbox(options_enable_padFF_text, app_title)
+			#print(type(rv), rv)
+			if rv:
+				padding = 'FF'
+			state = 'options_confirm'
+		elif state == 'options_confirm':
+			rv = eg.ccbox(options_confirm_text.format(prefix=prefix, padding=padding), app_title)
+			#print(type(rv), rv)
+			if not rv or rv == '':
+				state = 'choose_task'
+			else:
+				if prefix == 'None':
+					global_vars.options.prefix = None
+				else:
+					global_vars.options.prefix = prefix
+
+
+				if padding == '00':
+					global_vars.options.pad00 = True
+					global_vars.options.padFF = False
+				elif padding == 'FF':
+					global_vars.options.pad00 = False
+					global_vars.options.padFF = True
+				else:
+					global_vars.options.pad00 = False
+					global_vars.options.padFF = False
+
+				state = 'choose_task'
+		#
+		# Inject ROM
+		#
 		elif state == 'inject':
 			# Hidden state to clear our filenames
 			app_title = 'Inject ROM'
@@ -389,7 +483,9 @@ def	main_gui():
 				inpsb = rv
 				state = 'inject_choose_outpsb'
 		elif state == 'inject_choose_outpsb':
-			rv = eg.filesavebox(inject_choose_outpsb_text, title=app_title, default='alldata.psb.m', filetypes=[['*.psb.m', 'psb.m files']])
+			# Choose the output psb. We set the default to the input psb (common use-case).
+			# The filesavebox will prompt if you want to over-write.
+			rv = eg.filesavebox(inject_choose_outpsb_text, title=app_title, default=inpsb, filetypes=[['*.psb.m', 'psb.m files']])
 			#print(type(rv), rv)
 			if not rv or rv == '' or rv == '.':
 				state = 'choose_task'
@@ -397,7 +493,20 @@ def	main_gui():
 				outpsb = rv
 				state = 'inject_confirm'
 		elif state == 'inject_confirm':
-			rv = eg.ccbox(inject_confirm_text.format(rom=inrom, inpsb=inpsb, outpsb=outpsb), app_title)
+
+			if global_vars.options.prefix:
+				prefix = global_vars.options.prefix
+			else:
+				prefix = 'None'
+
+			if global_vars.options.pad00:
+				padding = '00'
+			elif global_vars.options.padFF:
+				padding = 'FF'
+			else:
+				padding = 'None'
+
+			rv = eg.ccbox(inject_confirm_text.format(rom=inrom, prefix=prefix, padding=padding, inpsb=inpsb, outpsb=outpsb), app_title)
 			#print(type(rv), rv)
 			if not rv or rv == '':
 				state = 'choose_task'
