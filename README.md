@@ -112,3 +112,18 @@ inject_gba --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /pat
 
 You can put options in a text file, one option per line, and run it using:
 inject_gba @optionsfile
+
+-----
+
+## Batch processing:
+
+You can batch convert using:
+```
+inject_gba_batch --base=BASEDIR *.gba
+```
+
+This also supports options in a text file, so you can batch-convert with goomba etc.
+
+You can create a desktop shortcut and use this as a drop-target.
+
+For details, RTFS.
