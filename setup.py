@@ -13,6 +13,7 @@ setup(
 		"console_scripts": [
 			'inject_gba		= inject_gba.inject_gba:main',
 			'inject_gba_batch	= inject_gba.inject_gba:main_batch',
+			'inject_gba_gui		= inject_gba.inject_gba:main_gui',
 		],
 	},
 	install_requires	= [

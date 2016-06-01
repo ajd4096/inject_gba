@@ -297,14 +297,11 @@ This will:
 	parser.add_argument(		'--create-backup',	dest='create_backup',		help='Create backup before over-writing output files',		action='store_true',	default=False)
 
 	parser.add_argument(		'--prefix',		dest='prefix',			help='Prefix new rom with PREFIX',		metavar='PREFIX')
-
 	group_pad = parser.add_mutually_exclusive_group()
 	group_pad.add_argument(		'--pad00',	dest='pad00',		help='Pad new rom with 00',			action='store_true',	default=False)
 	group_pad.add_argument(		'--padFF',	dest='padFF',		help='Pad new rom with FF',			action='store_true',	default=False)
 
-	group = parser.add_mutually_exclusive_group(required=True)
-	group.add_argument(		'--gui',	dest='gui',		help='Use GUI',					action='store_true',	default=False)
-	group.add_argument(		'--inpsb',	dest='inpsb',		help='Read INPSB',				metavar='INPSB')
+	parser.add_argument(		'--inpsb',	dest='inpsb',		help='Read INPSB',				metavar='INPSB',	required=True)
 	parser.add_argument(		'--outrom',	dest='outrom',		help='Write the rom file to OUTROM',		metavar='OUTROM')
 	parser.add_argument(		'--inrom',	dest='inrom',		help='Replace the rom file with INROM',		metavar='INROM')
 	parser.add_argument(		'--outpsb',	dest='outpsb',		help='Write new psb to OUTPSB',			metavar='OUTPSB')
@@ -316,10 +313,7 @@ This will:
 	global_vars.options = parser.parse_args()
 	global_vars.verbose = global_vars.options.verbose
 
-	if global_vars.options.gui:
-		main_gui()
-	else:
-		release_the_kraken(global_vars.options.inpsb, global_vars.options.outrom, global_vars.options.inrom, global_vars.options.outpsb)
+	release_the_kraken(global_vars.options.inpsb, global_vars.options.outrom, global_vars.options.inrom, global_vars.options.outpsb)
 
 ##################################################
 #
@@ -334,10 +328,9 @@ def	main_batch():
 	parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 	parser.add_argument('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='count',		default=0)
 
-	parser.add_argument(		'--base',		dest='base',			help='Copy base game directory from BASE',	metavar='BASE')
+	parser.add_argument(		'--base',		dest='base',			help='Copy base game directory from BASE',	metavar='BASE',		default='base')
 
 	parser.add_argument(		'--prefix',		dest='prefix',			help='Prefix new rom with PREFIX',		metavar='PREFIX')
-
 	group_pad = parser.add_mutually_exclusive_group()
 	group_pad.add_argument(		'--pad00',	dest='pad00',		help='Pad new rom with 00',			action='store_true',	default=False)
 	group_pad.add_argument(		'--padFF',	dest='padFF',		help='Pad new rom with FF',			action='store_true',	default=False)
@@ -395,6 +388,18 @@ def	main_batch():
 
 def	main_gui():
 
+	parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
+
+	parser.add_argument('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='count',		default=0)
+
+	parser.add_argument(		'--prefix',		dest='prefix',			help='Prefix new rom with PREFIX',		metavar='PREFIX')
+	group_pad = parser.add_mutually_exclusive_group()
+	group_pad.add_argument(		'--pad00',	dest='pad00',		help='Pad new rom with 00',			action='store_true',	default=False)
+	group_pad.add_argument(		'--padFF',	dest='padFF',		help='Pad new rom with FF',			action='store_true',	default=False)
+
+	global_vars.options = parser.parse_args()
+	global_vars.verbose = global_vars.options.verbose
+
 	# Default --create-backup and --allow-overwrite to ON
 	# The filesave box will ask if you want to overwrite.
 	global_vars.options.create_backup	= True
@@ -403,16 +408,17 @@ def	main_gui():
 	app_name = 'GBA injection wizard'
 	app_title = app_name
 
-	choose_task_text ='''This tool provides a simplified interface to:
+	choose_task_text ='''
+This tool provides a simplified interface to:
 
-	* Decrypt, decompress, and unpack an alldata.psb.m/alldata.bin file,
+* Decrypt, decompress, and unpack an alldata.psb.m/alldata.bin file,
 
-	* Extract or replace the ROM file
+* Extract or replace the ROM file
 
-	* Repack, compress, and encrypt a new alldata.psb.m/alldata.bin file.
+* Repack, compress, and encrypt a new alldata.psb.m/alldata.bin file.
 
+What do you want to do?'''
 
-	What do you want to do?'''
 	choose_task_choices = [
 		'Extract ROM',
 		'Set Injection Options',

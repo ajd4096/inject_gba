@@ -93,12 +93,9 @@ You do not need to keep the source directory.
 
 -----
 
-## Quick Start:
+## Usage:
 
-To start the GUI:
-```
-inject_gba --gui
-```
+### CLI operation
 
 To extract a rom:
 ```
@@ -110,20 +107,46 @@ To inject a rom:
 inject_gba --inpsb /path/to/alldata.psb.m --inrom /path/to/new.rom --outpsb /path/to/new/alldata.psb.m
 ```
 
-You can put options in a text file, one option per line, and run it using:
+To list supported options:
+```
+inject_gba -h
+```
+
+You can also put options in a text file, one option per line:
 inject_gba @optionsfile
 
------
-
-## Batch processing:
+### Batch processing:
 
 You can batch convert using:
 ```
 inject_gba_batch --base=BASEDIR *.gba
 ```
 
-This also supports options in a text file, so you can batch-convert with goomba etc.
+To list supported options:
+```
+inject_gba_batch -h
+```
+
+You can also put options in a text file, one option per line:
+inject_gba_batch @optionsfile
 
 You can create a desktop shortcut and use this as a drop-target.
+
+### GUI operation
+
+To start the GUI:
+```
+inject_gba_gui
+```
+
+To list supported options:
+```
+inject_gba_gui -h
+```
+
+You can also put options in a text file, one option per line:
+inject_gba_gui @optionsfile
+
+-----
 
 For details, RTFS.
