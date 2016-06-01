@@ -113,7 +113,9 @@ inject_gba -h
 ```
 
 You can also put options in a text file, one option per line:
+```
 inject_gba @optionsfile
+```
 
 ### Batch processing:
 
@@ -128,7 +130,9 @@ inject_gba_batch -h
 ```
 
 You can also put options in a text file, one option per line:
+```
 inject_gba_batch @optionsfile
+```
 
 You can create a desktop shortcut and use this as a drop-target.
 
@@ -145,7 +149,9 @@ inject_gba_gui -h
 ```
 
 You can also put options in a text file, one option per line:
+```
 inject_gba_gui @optionsfile
+```
 
 -----
 
