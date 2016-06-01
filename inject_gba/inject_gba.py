@@ -264,6 +264,11 @@ def	main_cli():
 def	main_gui():
 	import	easygui as eg
 
+	# Default --create-backup and --allow-overwrite to ON
+	# The filesave box will ask if you want to overwrite.
+	global_vars.options.create_backup	= True
+	global_vars.options.allow_overwrite	= True
+
 	app_name = 'GBA injection wizard'
 	app_title = app_name
 
