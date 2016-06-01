@@ -2,11 +2,20 @@
 
 import	argparse
 import	os
+import	shutil
 import	sys
 import	easygui	as eg
 
 import	inject_gba.global_vars	as global_vars
 import	inject_gba.psb		as psb
+
+##################################################
+#
+#	load_from_psb
+#
+#	Read in a .psb.m file into our PSB object
+#	If there is a matching alldata.bin file, read that in too
+#
 
 def	load_from_psb(psb_filename):
 	if not psb_filename:
@@ -52,7 +61,6 @@ def	load_from_psb(psb_filename):
 	else:
 		return
 
-
 	# Read in the alldata.bin file if it exists
 	bin_filename  = base_filename + '.bin'
 	if os.path.isfile(bin_filename):
@@ -66,7 +74,75 @@ def	load_from_psb(psb_filename):
 
 	return mypsb
 
-# Count the TOCTOUs!
+##################################################
+#
+#	read_rom
+#
+#	This reads in a ROM file, adds prefix/padding, and injects it into the psb object
+#
+
+def	read_rom(mypsb, filename):
+	if not mypsb or not filename:
+		return
+
+	if global_vars.verbose:
+		print("Reading '%s'" % filename)
+
+	prefix = b''
+	padding = b''
+
+	if global_vars.options.prefix:
+		prefix = open(global_vars.options.prefix, 'rb').read()
+
+	new_data = open(filename, 'rb').read()
+	old_data = mypsb.extract_rom()
+
+	if (len(prefix) + len(new_data)) < len(old_data):
+		if global_vars.options.pad00:
+			padding = b'\x00' * (len(old_data) - len(new_data) - len(prefix))
+		elif global_vars.options.padFF:
+			padding = b'\xFF' * (len(old_data) - len(new_data) - len(prefix))
+
+	mypsb.replace_rom_file(prefix + new_data + padding)
+
+
+##################################################
+#
+#	release_the_kraken
+#
+#	This is the main read/write logic
+#
+
+def	release_the_kraken(inpsb, outrom, inrom, outpsb):
+	# We must have an inpsb (this should be enforced by the parser)
+	if not inpsb:
+		parser.print_help()
+		exit(1)
+
+	mypsb = load_from_psb(inpsb)
+
+	# If we have outrom, write it out
+	if outrom:
+		write_rom(mypsb, outrom)
+
+	# If we have inrom, read it in
+	if inrom:
+		read_rom(mypsb, inrom)
+
+	# If we have outpsb, write it out
+	if outpsb:
+		write_psb(mypsb, outpsb)
+		write_bin(mypsb, outpsb)
+
+##################################################
+#
+#	rename_backup
+#
+#	Optionally create a backup file, and check if we are over-writing a file
+#
+#	Count the TOCTOUs!
+#
+
 def	rename_backup(filename):
 
 	# Optionally create a .bak if none exist
@@ -80,7 +156,48 @@ def	rename_backup(filename):
 
 	return True
 
-# Write out our PSB
+##################################################
+#
+#	write_bin
+#
+#	Write out the alldata.bin file
+#
+
+def	write_bin(mypsb, psb_filename):
+	if not mypsb or not psb_filename:
+		return
+
+	# Join the subfiles back into a single ADB
+	bin_data = mypsb.join_subfiles()
+	if bin_data is None:
+		return
+
+	if psb_filename.endswith('.psb'):
+		basename = psb_filename[:-len('.psb')]
+	elif psb_filename.endswith('.psb.m'):
+		basename = psb_filename[:-len('.psb.m')]
+	else:
+		return
+
+	filename = basename + '.bin'
+
+	if not rename_backup(filename):
+		return
+
+	if global_vars.verbose:
+		print("Writing '%s'" % filename)
+
+	open(filename, 'wb').write(bytes(bin_data))
+
+##################################################
+#
+#	write_psb
+#
+#	Write out our PSB object into a file
+#	If the filename ends with .m, the file is compressed
+#	The file is encrypted using the filename
+#
+
 def	write_psb(mypsb, filename):
 	if not mypsb or not filename:
 		return
@@ -114,32 +231,12 @@ def	write_psb(mypsb, filename):
 		# Write out the compressed/encrypted PSB data
 		open(filename, 'wb').write(psb_data2)
 
-# Write out the ADB
-def	write_bin(mypsb, psb_filename):
-	if not mypsb or not psb_filename:
-		return
-
-	# Join the subfiles back into a single ADB
-	bin_data = mypsb.join_subfiles()
-	if bin_data is None:
-		return
-
-	if psb_filename.endswith('.psb'):
-		basename = psb_filename[:-len('.psb')]
-	elif psb_filename.endswith('.psb.m'):
-		basename = psb_filename[:-len('.psb.m')]
-	else:
-		return
-
-	filename = basename + '.bin'
-
-	if not rename_backup(filename):
-		return
-
-	if global_vars.verbose:
-		print("Writing '%s'" % filename)
-
-	open(filename, 'wb').write(bytes(bin_data))
+##################################################
+#
+#	write_rom
+#
+#	This extracts the rom data from the psb object and writes it to a file.
+#
 
 def	write_rom(mypsb, filename):
 	if not mypsb or not filename:
@@ -153,30 +250,12 @@ def	write_rom(mypsb, filename):
 
 	mypsb.write_rom_file(filename)
 
-def	read_rom(mypsb, filename):
-	if not mypsb or not filename:
-		return
-
-	if global_vars.verbose:
-		print("Reading '%s'" % filename)
-
-	prefix = b''
-	padding = b''
-
-	if global_vars.options.prefix:
-		prefix = open(global_vars.options.prefix, 'rb').read()
-
-	new_data = open(filename, 'rb').read()
-	old_data = mypsb.extract_rom()
-
-	if (len(prefix) + len(new_data)) < len(old_data):
-		if global_vars.options.pad00:
-			padding = b'\x00' * (len(old_data) - len(new_data) - len(prefix))
-		elif global_vars.options.padFF:
-			padding = b'\xFF' * (len(old_data) - len(new_data) - len(prefix))
-
-	mypsb.replace_rom_file(prefix + new_data + padding)
-
+##################################################
+#
+#	main
+#
+#	Entry point for cli.
+#
 
 def	main():
 
@@ -233,35 +312,86 @@ This will:
 	if len(sys.argv) <= 1:
 		parser.print_help()
 		exit(0)
-	else:
-		options = parser.parse_args()
 
-	global_vars.verbose = options.verbose
-	global_vars.options = options
+	global_vars.options = parser.parse_args()
+	global_vars.verbose = global_vars.options.verbose
 
-	if options.gui:
+	if global_vars.options.gui:
 		main_gui()
 	else:
-		main_cli()
+		release_the_kraken(global_vars.options.inpsb, global_vars.options.outrom, global_vars.options.inrom, global_vars.options.outpsb)
 
-def	main_cli():
-	# We must have an inpsb (this should be enforced by the parser)
-	if not global_vars.options.inpsb:
+##################################################
+#
+#	main_batch
+#
+#	Entry point for batch/drop-target converter.
+#
+#	This will inject each provided ROM into a copy of the base game directory.
+#
+
+def	main_batch():
+	parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
+	parser.add_argument('-v',	'--verbose',	dest='verbose',		help='verbose output',				action='count',		default=0)
+
+	parser.add_argument(		'--base',		dest='base',			help='Copy base game directory from BASE',	metavar='BASE')
+
+	parser.add_argument(		'--prefix',		dest='prefix',			help='Prefix new rom with PREFIX',		metavar='PREFIX')
+
+	group_pad = parser.add_mutually_exclusive_group()
+	group_pad.add_argument(		'--pad00',	dest='pad00',		help='Pad new rom with 00',			action='store_true',	default=False)
+	group_pad.add_argument(		'--padFF',	dest='padFF',		help='Pad new rom with FF',			action='store_true',	default=False)
+
+	parser.add_argument(		'files',	metavar='ROM', nargs='+', help='Batch convert ROM')
+
+	if len(sys.argv) <= 1:
 		parser.print_help()
-	mypsb = load_from_psb(global_vars.options.inpsb)
+		exit(0)
 
-	# If we have outrom, write it out
-	if global_vars.options.outrom:
-		write_rom(mypsb, global_vars.options.outrom)
+	global_vars.options = parser.parse_args()
+	global_vars.verbose = global_vars.options.verbose
 
-	# If we have inrom, read it in
-	if global_vars.options.inrom:
-		read_rom(mypsb, global_vars.options.inrom)
+	# Because we are working on a copy of the base, force --allow-overwrite ON and --create-backup OFF
+	global_vars.options.create_backup	= True
+	global_vars.options.allow_overwrite	= False
 
-	# If we have outpsb, write it out
-	if global_vars.options.outpsb:
-		write_psb(mypsb, global_vars.options.outpsb)
-		write_bin(mypsb, global_vars.options.outpsb)
+	if not os.path.isdir(global_vars.options.base):
+		print("Base '%s' not found" % global_vars.options.base)
+		return
+
+	for file in global_vars.options.files:
+
+		if global_vars.verbose >= global_vars.info_level:
+			print('-----')
+			print("Processing ROM '%s'" % file)
+
+		# Get the base part of the rom file for our directory name
+		file_base = os.path.basename(file)
+
+		# Remove the extension
+		for ext in ['.gba', '.GBA', '.rom', '.ROM']:
+			if file_base.endswith(ext):
+				file_base = file_base[:-len(ext)]
+				break
+
+		# If the directory already exists, skip this rom
+		if os.path.isdir(file_base):
+			print("%s exists, skipping" % file_base)
+			continue
+
+		# Copy our base game into the rom directory
+		shutil.copytree(global_vars.options.base, file_base)
+
+		psb = os.path.join(file_base, 'content', 'alldata.psb.m')
+
+		release_the_kraken(psb, None, file, psb)
+
+##################################################
+#
+#	main_gui
+#
+#	Entry point for wizard gui.
+#
 
 def	main_gui():
 
@@ -395,7 +525,7 @@ and save the result as:
 			if not rv or rv == '':
 				state = 'choose_task'
 			else:
-				mypsb = load_from_psb(inpsb)
+				release_the_kraken(inpsb, outrom, None, None)
 				write_rom(mypsb, outrom)
 				state = 'choose_task'
 		#
@@ -512,10 +642,7 @@ and save the result as:
 			if not rv or rv == '':
 				state = 'choose_task'
 			else:
-				mypsb = load_from_psb(inpsb)
-				read_rom(mypsb, inrom)
-				write_psb(mypsb, outpsb)
-				write_bin(mypsb, outpsb)
+				release_the_kraken(inpsb, None, inrom, outpsb)
 				state = 'choose_task'
 		else:
 			print("Unknown state '%s'" % state)
