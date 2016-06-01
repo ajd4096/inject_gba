@@ -532,7 +532,6 @@ and save the result as:
 				state = 'choose_task'
 			else:
 				release_the_kraken(inpsb, outrom, None, None)
-				write_rom(mypsb, outrom)
 				state = 'choose_task'
 		#
 		# Set Injection Options
