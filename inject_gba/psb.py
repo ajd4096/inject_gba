@@ -503,6 +503,8 @@ class	PSB():
 	def	write_rom_file(self, filename):
 		for i, fi in enumerate(self.fileinfo):
 			if 'system/roms' in self.names[fi.ni]:
+				if global_vars.verbose >= global_vars.info_level:
+					print("Extracting '%s'" % self.names[fi.ni])
 				self.write_subfile(i, filename)
 				break
 
