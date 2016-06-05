@@ -530,7 +530,8 @@ class	PSB():
 			print("Writing '%s'" % filename)
 	
 		# Make sure the output directory exists
-		os.makedirs(os.path.dirname(filename), exist_ok = True)
+		if len(os.path.dirname(filename)):
+			os.makedirs(os.path.dirname(filename), exist_ok = True)
 
 		# Get a copy of the encrypted/compressed data from our array
 		fd2 = self.subfile_data[i][:]
