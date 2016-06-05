@@ -521,9 +521,6 @@ class	PSB():
 	# Write out a single subfile to it's disk file.
 	# The file data is unencrypted/uncompressed.
 	def	write_subfile(self, i, filename):
-		if os.path.isfile(filename):
-			print("File '%s' exists, not over-writing" % filename)
-			return
 
 		fi = self.fileinfo[i]
 		if global_vars.verbose >= global_vars.trace_level:
