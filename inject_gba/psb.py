@@ -332,7 +332,8 @@ class	PSB():
 	# Write out our chunk files
 	def	write_chunks(self, base_dir):
 		# Make sure the output directory exists
-		os.makedirs(base_dir, exist_ok = True)
+		if len(base_dir):
+			os.makedirs(base_dir, exist_ok = True)
 		for i, fn in enumerate(self.chunknames):
 			filename = os.path.join(base_dir, fn)
 			if os.path.isfile(filename):
